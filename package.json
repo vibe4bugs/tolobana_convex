@@ -1,0 +1,20 @@
+{
+  "name": "@tolobana/convex-backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Shared Convex backend for Tolobana admin and member portal",
+  "scripts": {
+    "dev": "convex dev",
+    "deploy": "convex deploy",
+    "codegen": "convex codegen",
+    "typecheck": "tsc -p convex/tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "convex": "^1.35.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "~5.7.2"
+  }
+}
