@@ -32,8 +32,10 @@ npx convex deploy
 Both apps depend on this package via:
 
 ```json
-"@tolobana/convex-backend": "file:../tolobana_convex"
+"@tolobana/convex-backend": "github:vibe4bugs/tolobana_convex#main"
 ```
+
+(Use a tag or commit SHA instead of `#main` for reproducible releases.)
 
 and import generated API bindings from:
 
