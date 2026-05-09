@@ -5,8 +5,35 @@ Shared Convex backend for Tolobana admin and member portal.
 ## Responsibilities
 
 - Own `convex/schema.ts`, all backend function modules, and `auth.config.ts`.
-- Be the only place where `npx convex dev` / `npx convex deploy` are run for the shared deployment.
+- Be the only place where `npx convex dev` / `npx convex deploy` are run (this repo is still the **single source** for backend code).
 - Generate API bindings consumed by both apps.
+
+## Two Convex deployments (admin vs member)
+
+Tolobana intentionally uses **two separate Convex deployments** = **two databases**:
+
+| App | Typical env | Role |
+|-----|-------------|------|
+| **Admin** (`tolobana_admin`) | `VITE_CONVEX_URL` | Clerk-guarded mutations, surveys, announcements, hub admin, etc. |
+| **Member** (`toloba_na_member_portal`) | `VITE_CONVEX_URL_MEMBER` | `members.login`, `members` + `hub_contributions`, reads live content (often from admin deployment — see app wiring). |
+
+This package is **one codebase** pushed to **both** deployments so function names and schema stay in sync. **Each deployment must receive its own `npx convex deploy`** — pushing to admin does **not** update member (and vice versa).
+
+### Deploying to the correct database
+
+Your laptop links `tolobana_convex` to **one** Convex **project** at a time (see `.env.local` / `CONVEX_DEPLOYMENT` from `npx convex dev`).
+
+1. **Admin prod** (e.g. `fortunate-ox-402`): link CLI to the **admin** Convex project → from `tolobana_convex` run `npx convex deploy` and confirm when prompted (production for that project).
+
+2. **Member prod** (e.g. `mild-hedgehog-2`): switch this folder to the **member** Convex **project** (separate from admin — separate DB), then deploy again. Typical approaches:
+   - Run `npx convex dev` and go through project setup **selecting the member project** when prompted (if your `.env.local` is cleared or you’re linking for the first time), **or**
+   - In the [Convex dashboard](https://dashboard.convex.dev), open the **member** project (the one that lists deployment `mild-hedgehog-2` / your member URL), open **Settings → Deploy / CLI**, and follow the instructions to **deploy this backend** to that project.
+
+After the CLI is tied to the **member** project, `npx convex deploy` updates **member** prod. Passing `--url` on deploy does **not** reliably switch projects — the linked project in `.env.local` / Convex config decides where code goes.
+
+Same repo, **two pushes** when you release: once linked to **admin** → deploy; once linked to **member** → deploy.
+
+Set **`MEMBERS_IMPORT_SECRET`** only on the **member** deployment in the dashboard; run XLSX import with `MEMBER_CONVEX_URL` = that member URL.
 
 ## Usage
 
@@ -18,7 +45,7 @@ npm install
 npx convex dev
 ```
 
-For production releases:
+For production releases (repeat per linked project when maintaining **two** deployments — see above):
 
 ```bash
 npx convex deploy
@@ -31,17 +58,9 @@ Login in the member portal is an ITS lookup against the **`members`** table on w
 1. In the Convex dashboard for the **member** deployment (same URL as `VITE_CONVEX_URL_MEMBER` / `MEMBER_CONVEX_URL`), add an environment variable:
    - **`MEMBERS_IMPORT_SECRET`** — a long random string (keep it private).
 
-2. **Deploy this backend to that member deployment** so `members.importMembersBulk` exists in the cloud. `npx convex dev` only syncs your **linked dev** deployment — it does not automatically update `https://…convex.cloud` unless that URL *is* that dev deployment.
+2. **Deploy this backend to the member Convex project** so `members.importMembersBulk` exists on **member** prod. Link your CLI to the **member** project (see [Two Convex deployments](#two-convex-deployments-admin-vs-member)), then run `npx convex deploy`. `npx convex dev` only syncs the **linked dev** deployment.
 
-   From `tolobana_convex`:
-
-   ```bash
-   npx convex deploy --url "https://YOUR_MEMBER_DEPLOYMENT.convex.cloud"
-   ```
-
-   Use the **exact** host you pass as `MEMBER_CONVEX_URL` (e.g. `https://mild-hedgehog-2.convex.cloud`).
-
-   If the import fails with **Could not find public function for `members:importMembersBulk`**, the member deployment has not received this code yet — run the deploy above, then retry the import.
+   If the import fails with **Could not find public function for `members:importMembersBulk`**, member prod does not have this code yet — deploy from `tolobana_convex` while linked to the **member** project, then retry the import.
 
 3. From this repo (after `npm install`).
 
