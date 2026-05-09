@@ -1,21 +1,7 @@
 import { mutationGeneric as mutation, queryGeneric as query } from "convex/server";
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { requireIdentity } from "./auth";
 import { questionType } from "./schema";
-
-function assertSingleRequiredEmailQuestion(
-  questions: { type: string; required: boolean }[]
-) {
-  const emails = questions.filter((q) => q.type === "email");
-  if (emails.length !== 1) {
-    throw new Error(
-      "Add exactly one Email question and mark it required before this survey can go live."
-    );
-  }
-  if (!emails[0].required) {
-    throw new Error("The Email question must be required.");
-  }
-}
 
 const slugRegex = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
@@ -155,14 +141,18 @@ export const setSurveyLive = mutation({
   handler: async (ctx, { formId, is_live }) => {
     await requireIdentity(ctx);
     const form = await ctx.db.get(formId);
-    if (!form || form.archived) throw new Error("Not found");
+    if (!form || form.archived) throw new ConvexError("Survey not found.");
 
     if (is_live) {
       const qs = await ctx.db
         .query("questions")
         .withIndex("by_form", (q) => q.eq("form_id", formId))
         .collect();
-      assertSingleRequiredEmailQuestion(qs);
+      if (qs.length < 1) {
+        throw new ConvexError(
+          "Add at least one question before this survey can go live."
+        );
+      }
     }
 
     await ctx.db.patch(formId, {
