@@ -31,13 +31,25 @@ Login in the member portal is an ITS lookup against the **`members`** table on w
 1. In the Convex dashboard for the **member** deployment, add an environment variable:
    - **`MEMBERS_IMPORT_SECRET`** — a long random string (keep it private).
 
-2. From this repo (after `npm install`):
+2. From this repo (after `npm install`).
+
+**Use one line** (recommended — variables are passed to `npm`/`node` automatically):
 
 ```bash
 MEMBER_CONVEX_URL="https://YOUR_MEMBER_DEPLOYMENT.convex.cloud" \
 MEMBERS_IMPORT_SECRET="same-as-dashboard" \
 npm run import-members -- /absolute/or/relative/path/to/members.xlsx
 ```
+
+If you set variables on **separate lines** first, you must **`export`** them or `npm run` will not see them:
+
+```bash
+export MEMBER_CONVEX_URL="https://YOUR_MEMBER_DEPLOYMENT.convex.cloud"
+export MEMBERS_IMPORT_SECRET="same-as-dashboard"
+npm run import-members -- /path/to/members.xlsx
+```
+
+Note the secret name is **`MEMBERS_IMPORT_SECRET`** (not `MEMBER_IMPORT_SECRET`).
 
 (`CONVEX_URL` is still accepted by the script for backward compatibility.)
 

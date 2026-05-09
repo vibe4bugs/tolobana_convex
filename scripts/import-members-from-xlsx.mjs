@@ -99,10 +99,16 @@ async function main() {
     console.error(
       "Missing MEMBER_CONVEX_URL (your member deployment — same host as VITE_CONVEX_URL_MEMBER). Legacy CONVEX_URL is still accepted.",
     );
+    console.error(
+      "Tip: In zsh/bash, either prefix the command on one line (see README), or run: export MEMBER_CONVEX_URL=...",
+    );
     process.exit(1);
   }
   if (!secret) {
     console.error("Missing MEMBERS_IMPORT_SECRET (must match the Convex deployment env var).");
+    console.error(
+      'Tip: Name is MEMBERS_IMPORT_SECRET (with an S). Use export MEMBERS_IMPORT_SECRET=... or put it on the same line as npm run.',
+    );
     process.exit(1);
   }
 
