@@ -8,13 +8,15 @@
     "dev": "convex dev",
     "deploy": "convex deploy",
     "codegen": "convex codegen",
-    "typecheck": "tsc -p convex/tsconfig.json --noEmit"
+    "typecheck": "tsc -p convex/tsconfig.json --noEmit",
+    "import-members": "node scripts/import-members-from-xlsx.mjs"
   },
   "dependencies": {
     "convex": "^1.35.1"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
-    "typescript": "~5.7.2"
+    "typescript": "~5.7.2",
+    "xlsx": "^0.18.5"
   }
 }
