@@ -53,6 +53,8 @@ Note the secret name is **`MEMBERS_IMPORT_SECRET`** (not `MEMBER_IMPORT_SECRET`)
 
 (`CONVEX_URL` is still accepted by the script for backward compatibility.)
 
+If you see `XLSX.readFile is not a function`, pull the latest `tolobana_convex` — the import script uses the SheetJS default export so it works with Node’s ESM ↔ CommonJS interop.
+
 3. Spreadsheet: first sheet should have a header row. Supported column names (case-insensitive):
    - **`itsId`** (or `its_number`, `ITS`, etc.) — required; stored as digits-only for lookup.
    - **`name`** (or `full name`) — required.

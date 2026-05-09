@@ -23,8 +23,11 @@ import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { ConvexHttpClient } from "convex/browser";
-import * as XLSX from "xlsx";
+import xlsxPkg from "xlsx";
 import { api } from "../convex/_generated/api.js";
+
+/** Node ESM loads sheetjs as CJS interop — APIs live on `default`. */
+const XLSX = xlsxPkg.default ?? xlsxPkg;
 
 const BATCH_SIZE = 250;
 
