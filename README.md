@@ -34,10 +34,12 @@ Login in the member portal is an ITS lookup against the **`members`** table on w
 2. From this repo (after `npm install`):
 
 ```bash
-CONVEX_URL="https://YOUR_MEMBER_DEPLOYMENT.convex.cloud" \
+MEMBER_CONVEX_URL="https://YOUR_MEMBER_DEPLOYMENT.convex.cloud" \
 MEMBERS_IMPORT_SECRET="same-as-dashboard" \
 npm run import-members -- /absolute/or/relative/path/to/members.xlsx
 ```
+
+(`CONVEX_URL` is still accepted by the script for backward compatibility.)
 
 3. Spreadsheet: first sheet should have a header row. Supported column names (case-insensitive):
    - **`itsId`** (or `its_number`, `ITS`, etc.) — required; stored as digits-only for lookup.

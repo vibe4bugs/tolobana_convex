@@ -7,7 +7,7 @@
  *   - Same value in your shell or a local `.env` file (dotenv not required if you export vars manually).
  *
  * Usage:
- *   CONVEX_URL="https://YOUR_MEMBER_DEPLOYMENT.convex.cloud" \
+ *   MEMBER_CONVEX_URL="https://YOUR_MEMBER_DEPLOYMENT.convex.cloud" \
  *   MEMBERS_IMPORT_SECRET="your-secret" \
  *   node scripts/import-members-from-xlsx.mjs ./path/to/members.xlsx
  *
@@ -85,15 +85,20 @@ function cellToString(val) {
 
 async function main() {
   const filePath = process.argv[2];
-  const convexUrl = process.env.CONVEX_URL;
+  const convexUrl =
+    process.env.MEMBER_CONVEX_URL ?? process.env.CONVEX_URL;
   const secret = process.env.MEMBERS_IMPORT_SECRET;
 
   if (!filePath) {
-    console.error("Usage: CONVEX_URL=... MEMBERS_IMPORT_SECRET=... node scripts/import-members-from-xlsx.mjs <file.xlsx>");
+    console.error(
+      "Usage: MEMBER_CONVEX_URL=... MEMBERS_IMPORT_SECRET=... node scripts/import-members-from-xlsx.mjs <file.xlsx>",
+    );
     process.exit(1);
   }
   if (!convexUrl) {
-    console.error("Missing CONVEX_URL (use your member deployment, same as VITE_CONVEX_URL_MEMBER).");
+    console.error(
+      "Missing MEMBER_CONVEX_URL (your member deployment — same host as VITE_CONVEX_URL_MEMBER). Legacy CONVEX_URL is still accepted.",
+    );
     process.exit(1);
   }
   if (!secret) {
