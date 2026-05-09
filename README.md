@@ -28,10 +28,22 @@ npx convex deploy
 
 Login in the member portal is an ITS lookup against the **`members`** table on whichever Convex deployment your app uses as **`VITE_CONVEX_URL_MEMBER`**. Import the spreadsheet into **that same deployment** so sign-in resolves real rows.
 
-1. In the Convex dashboard for the **member** deployment, add an environment variable:
+1. In the Convex dashboard for the **member** deployment (same URL as `VITE_CONVEX_URL_MEMBER` / `MEMBER_CONVEX_URL`), add an environment variable:
    - **`MEMBERS_IMPORT_SECRET`** — a long random string (keep it private).
 
-2. From this repo (after `npm install`).
+2. **Deploy this backend to that member deployment** so `members.importMembersBulk` exists in the cloud. `npx convex dev` only syncs your **linked dev** deployment — it does not automatically update `https://…convex.cloud` unless that URL *is* that dev deployment.
+
+   From `tolobana_convex`:
+
+   ```bash
+   npx convex deploy --url "https://YOUR_MEMBER_DEPLOYMENT.convex.cloud"
+   ```
+
+   Use the **exact** host you pass as `MEMBER_CONVEX_URL` (e.g. `https://mild-hedgehog-2.convex.cloud`).
+
+   If the import fails with **Could not find public function for `members:importMembersBulk`**, the member deployment has not received this code yet — run the deploy above, then retry the import.
+
+3. From this repo (after `npm install`).
 
 **Use one line** (recommended — variables are passed to `npm`/`node` automatically):
 
@@ -55,7 +67,7 @@ Note the secret name is **`MEMBERS_IMPORT_SECRET`** (not `MEMBER_IMPORT_SECRET`)
 
 If you see `XLSX.readFile is not a function`, pull the latest `tolobana_convex` — the import script uses the SheetJS default export so it works with Node’s ESM ↔ CommonJS interop.
 
-3. Spreadsheet: first sheet should have a header row. Supported column names (case-insensitive):
+4. Spreadsheet: first sheet should have a header row. Supported column names (case-insensitive):
    - **`itsId`** (or `its_number`, `ITS`, etc.) — required; stored as digits-only for lookup.
    - **`name`** (or `full name`) — required.
    - **`email`** — optional.
