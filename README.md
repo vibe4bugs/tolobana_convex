@@ -35,6 +35,34 @@ Same repo, **two pushes** when you release: once linked to **admin** → deploy;
 
 Set **`MEMBERS_IMPORT_SECRET`** only on the **member** deployment in the dashboard; run XLSX import with `MEMBER_CONVEX_URL` = that member URL.
 
+### How to point this folder at the member project (or admin)
+
+Convex decides which deployment you hit from **project link data** (usually in `.env.local`), not from `VITE_*` in the React apps.
+
+**Recommended: two env files + `--env-file`**
+
+1. Leave your normal **admin** link in `.env.local` (what you already use with `npx convex dev`).
+2. In [Convex Dashboard](https://dashboard.convex.dev), open the **member** project — the one whose **production** URL matches `VITE_CONVEX_URL_MEMBER` (e.g. `https://mild-hedgehog-2.convex.cloud`).
+3. Open **Project settings** → **CLI** / **Deploy** (wording varies) and copy the **environment / CLI variables** Convex shows for that project (often includes `CONVEX_DEPLOYMENT` and related values).
+4. Create **`tolobana_convex/.env.member.local`** (gitignored) and paste those variables in. Do not commit this file.
+5. Deploy **only** the member database:
+
+   ```bash
+   cd tolobana_convex
+   npx convex deploy --env-file .env.member.local
+   ```
+
+   The CLI flag `--env-file` overrides `.env.local` for that command so you do not have to swap files by hand.
+
+**Alternate: re-link the folder (swap projects)**
+
+1. Copy `.env.local` to a backup (e.g. `.env.local.admin.bak`).
+2. Delete or rename `.env.local`, then run `npx convex dev` and complete setup, choosing the **member** project.
+3. Run `npx convex deploy` — that push goes to **member** prod.
+4. Restore your admin `.env.local` from the backup when you need to work on admin again.
+
+**Verify:** After a member deploy, the dashboard for the **member** project should show a new deployment / recent push; the **admin** project is unchanged.
+
 ## Usage
 
 From this directory:

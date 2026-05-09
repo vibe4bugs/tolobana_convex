@@ -1,2 +1,4 @@
 node_modules/
 .env.local
+.env.admin.local
+.env.member.local
