@@ -44,7 +44,10 @@ Convex decides which deployment you hit from **project link data** (usually in `
 1. Leave your normal **admin** link in `.env.local` (what you already use with `npx convex dev`).
 2. In [Convex Dashboard](https://dashboard.convex.dev), open the **member** project — the one whose **production** URL matches `VITE_CONVEX_URL_MEMBER` (e.g. `https://mild-hedgehog-2.convex.cloud`).
 3. Open **Project settings** → **CLI** / **Deploy** (wording varies) and copy the **environment / CLI variables** Convex shows for that project (often includes `CONVEX_DEPLOYMENT` and related values).
-4. Create **`tolobana_convex/.env.member.local`** (gitignored) and paste those variables in. Do not commit this file.
+4. Create **`tolobana_convex/.env.member.local`** (gitignored) **before** running deploy — the file must exist on disk. Paste the Convex CLI variables from the dashboard (for example `CONVEX_DEPLOYMENT` and/or `CONVEX_DEPLOY_KEY`, depending on what your project shows). Do not commit this file.
+
+   If you run deploy **before** creating the file, Node.js may print **`node: .env.member.local: not found`** — that means the path is missing or wrong.
+
 5. Deploy **only** the member database:
 
    ```bash
@@ -53,6 +56,14 @@ Convex decides which deployment you hit from **project link data** (usually in `
    ```
 
    The CLI flag `--env-file` overrides `.env.local` for that command so you do not have to swap files by hand.
+
+   **Alternative (no file):** pass the same variables inline for one command, for example:
+
+   ```bash
+   CONVEX_DEPLOYMENT="…from dashboard…" npx convex deploy
+   ```
+
+   (Exact variable names match what the Convex dashboard shows for that project.)
 
 **Alternate: re-link the folder (swap projects)**
 
