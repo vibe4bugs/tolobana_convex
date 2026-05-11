@@ -1,4 +1,5 @@
 import { mutationGeneric as mutation } from "convex/server";
+import { normalizeEmail } from "./email";
 
 /** Dev-only convenience seed; do not expose to untrusted callers in production. */
 export const seed = mutation({
@@ -7,14 +8,14 @@ export const seed = mutation({
     const member1 = await ctx.db.insert("members", {
       its_number: "12345678",
       name: "John Doe",
-      email: "john@example.com",
+      email: normalizeEmail("john@example.com"),
       created_at: Date.now(),
     });
 
     const member2 = await ctx.db.insert("members", {
       its_number: "87654321",
       name: "Jane Smith",
-      email: "jane@example.com",
+      email: normalizeEmail("jane@example.com"),
       created_at: Date.now(),
     });
 

@@ -1,6 +1,7 @@
 import { mutationGeneric as mutation, queryGeneric as query } from "convex/server";
 import { ConvexError, v } from "convex/values";
 import { requireIdentity } from "./auth";
+import { normalizeEmail } from "./email";
 import { questionType } from "./schema";
 
 const slugRegex = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -241,6 +242,22 @@ export const listSubmissionsForSurvey = query({
       .collect();
     submissions.sort((a, b) => b.submitted_at - a.submitted_at);
 
+    const membersList = await ctx.db.query("members").collect();
+    const memberByEmailLc = new Map<
+      string,
+      { its_number: string; name: string }
+    >();
+    for (const m of membersList) {
+      if (!m.email?.trim()) continue;
+      const key = normalizeEmail(m.email);
+      if (!memberByEmailLc.has(key)) {
+        memberByEmailLc.set(key, {
+          its_number: m.its_number,
+          name: m.name,
+        });
+      }
+    }
+
     const rows = [];
     for (const sub of submissions) {
       const answers = await ctx.db
@@ -251,9 +268,16 @@ export const listSubmissionsForSurvey = query({
       for (const a of answers) {
         byQ[a.question_id] = a.value;
       }
+      const emailKey = sub.respondent_email?.trim()
+        ? normalizeEmail(sub.respondent_email)
+        : null;
+      const respondentMember = emailKey
+        ? (memberByEmailLc.get(emailKey) ?? null)
+        : null;
       rows.push({
         submission: sub,
         answersByQuestionId: byQ,
+        respondentMember,
       });
     }
 
@@ -324,11 +348,15 @@ export const submit = mutation({
       throw new Error("This survey is no longer accepting responses.");
     }
 
-    if (args.respondent_email) {
+    const respondentEmail = args.respondent_email?.trim()
+      ? normalizeEmail(args.respondent_email)
+      : undefined;
+
+    if (respondentEmail) {
       const existing = await ctx.db
         .query("submissions")
         .withIndex("by_respondent_email", (q) =>
-          q.eq("respondent_email", args.respondent_email),
+          q.eq("respondent_email", respondentEmail),
         )
         .filter((q) => q.eq(q.field("form_id"), args.formId))
         .first();
@@ -340,7 +368,7 @@ export const submit = mutation({
 
     const submissionId = await ctx.db.insert("submissions", {
       form_id: args.formId,
-      respondent_email: args.respondent_email,
+      respondent_email: respondentEmail,
       submitted_at: Date.now(),
     });
 
@@ -359,10 +387,11 @@ export const submit = mutation({
 export const getOwnSubmission = query({
   args: { formId: v.id("forms"), email: v.string() },
   handler: async (ctx, args) => {
+    const emailKey = normalizeEmail(args.email);
     return await ctx.db
       .query("submissions")
       .withIndex("by_respondent_email", (q) =>
-        q.eq("respondent_email", args.email),
+        q.eq("respondent_email", emailKey),
       )
       .filter((q) => q.eq(q.field("form_id"), args.formId))
       .unique();

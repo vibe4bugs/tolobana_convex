@@ -87,9 +87,12 @@ export default defineSchema({
   members: defineTable({
     its_number: v.string(),
     name: v.string(),
+    /** Lowercased trimmed for `by_email` (import + survey submit use `normalizeEmail`). */
     email: v.optional(v.string()),
     created_at: v.number(),
-  }).index("by_its_number", ["its_number"]),
+  })
+    .index("by_its_number", ["its_number"])
+    .index("by_email", ["email"]),
 
   /**
    * Member-reported contributions toward a hub_collection.

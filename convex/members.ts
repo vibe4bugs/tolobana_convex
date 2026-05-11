@@ -1,5 +1,6 @@
 import { mutationGeneric as mutation, queryGeneric as query } from "convex/server";
 import { ConvexError, v } from "convex/values";
+import { normalizeEmail } from "./email";
 
 /** Normalize ITS for lookup/storage: digits only (matches spreadsheet itsId imports). */
 function normalizeIts(raw: string): string {
@@ -70,7 +71,7 @@ export const importMembersBulk = mutation({
       const name = row.name.trim();
       if (!name) continue;
 
-      const email = row.email?.trim() || undefined;
+      const email = row.email?.trim() ? normalizeEmail(row.email) : undefined;
 
       const existing = await ctx.db
         .query("members")
