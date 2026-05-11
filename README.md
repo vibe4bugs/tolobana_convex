@@ -167,6 +167,25 @@ Format the ITS column as **Text** in Excel if IDs are long (avoids rounding).
 
 The dev helper mutation `seed` still inserts sample members (`12345678`, …) — do not run it in production, or delete those rows after importing your roster.
 
+### Admin survey responses (`its_id` / `name` columns)
+
+The admin **Responses** table loads `api.surveys.listSubmissionsForSurvey`, which joins the **`members`** table **on the same Convex deployment** as **`forms`**, **`questions`**, and **`submissions`** (the URL in **`tolobana_admin`’s `VITE_CONVEX_URL`**).
+
+If you use **two deployments** (surveys on admin/prod, roster only on member dev e.g. `https://mild-hedgehog-2.convex.cloud`), that join **does not** reach across URLs — `its_id` and **name** stay empty even when the member portal has the right ITS/name in survey answers.
+
+**Fix:** Import (or sync) the **same** member roster into the **admin/surveys** deployment as well:
+
+1. In the Convex dashboard for **`VITE_CONVEX_URL`** (not only the member URL), set **`MEMBERS_IMPORT_SECRET`** (can match the member deployment or be unique).
+2. Run the import script with **`MEMBER_CONVEX_URL`** pointing at **that** deployment:
+
+```bash
+MEMBER_CONVEX_URL="https://YOUR_ADMIN_OR_SURVEYS_DEPLOYMENT.convex.cloud" \
+MEMBERS_IMPORT_SECRET="same-as-dashboard-on-that-deployment" \
+npm run import-members -- /path/to/members.xlsx
+```
+
+After rows exist in **`members`** on the surveys deployment, **email** on each submission (normalized) will match and **`its_id` / `name`** will populate.
+
 ## Consumer apps
 
 - `tolobana_admin`
