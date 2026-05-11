@@ -169,22 +169,23 @@ The dev helper mutation `seed` still inserts sample members (`12345678`, …) �
 
 ### Admin survey responses (`its_id` / `name` columns)
 
-The admin **Responses** table loads `api.surveys.listSubmissionsForSurvey`, which joins the **`members`** table **on the same Convex deployment** as **`forms`**, **`questions`**, and **`submissions`** (the URL in **`tolobana_admin`’s `VITE_CONVEX_URL`**).
+The admin **Responses** table loads `api.surveys.listSubmissionsForSurvey`, which joins **`members` on the same Convex deployment** as surveys (`VITE_CONVEX_URL` in **tolobana_admin**).
 
-If you use **two deployments** (surveys on admin/prod, roster only on member dev e.g. `https://mild-hedgehog-2.convex.cloud`), that join **does not** reach across URLs — `its_id` and **name** stay empty even when the member portal has the right ITS/name in survey answers.
+#### Option A — Roster bridge (recommended when roster lives on member only)
 
-**Fix:** Import (or sync) the **same** member roster into the **admin/surveys** deployment as well:
+The admin UI calls **`surveyRosterBridge.fetchMemberRosterByEmails`** (Clerk-signed **action** on the **surveys** deployment). It queries the **member** deployment over HTTP using a shared secret.
 
-1. In the Convex dashboard for **`VITE_CONVEX_URL`** (not only the member URL), set **`MEMBERS_IMPORT_SECRET`** (can match the member deployment or be unique).
-2. Run the import script with **`MEMBER_CONVEX_URL`** pointing at **that** deployment:
+1. Generate a long random string **`MEMBER_ROSTER_BRIDGE_SECRET`**.
+2. In the Convex dashboard for the **member** deployment (e.g. `https://mild-hedgehog-2.convex.cloud`), add **`MEMBER_ROSTER_BRIDGE_SECRET`** with that value.
+3. In the dashboard for the **surveys/admin** deployment (`VITE_CONVEX_URL`), add:
+   - **`MEMBER_ROSTER_BRIDGE_SECRET`** — same string as on member.
+   - **`MEMBER_ROSTER_CONVEX_URL`** — member base URL, e.g. `https://mild-hedgehog-2.convex.cloud` (no trailing slash).
 
-```bash
-MEMBER_CONVEX_URL="https://YOUR_ADMIN_OR_SURVEYS_DEPLOYMENT.convex.cloud" \
-MEMBERS_IMPORT_SECRET="same-as-dashboard-on-that-deployment" \
-npm run import-members -- /path/to/members.xlsx
-```
+Redeploy **both** deployments from `tolobana_convex` after pulling this code. The admin Responses tab merges local `members` (if any) with the remote map from member.
 
-After rows exist in **`members`** on the surveys deployment, **email** on each submission (normalized) will match and **`its_id` / `name`** will populate.
+#### Option B — Duplicate roster on the surveys deployment
+
+If you prefer not to use the bridge, import the same XLSX into the **surveys** deployment as well (see [Member roster import](#member-roster-import-xlsx--members-table) with `MEMBER_CONVEX_URL` set to that deployment’s URL).
 
 ## Consumer apps
 

@@ -105,3 +105,45 @@ export const getById = query({
     return await ctx.db.get(args.memberId);
   },
 });
+
+/**
+ * Server-to-server: admin deployment calls this on the **member** deployment via
+ * `surveyRosterBridge.fetchMemberRosterByEmails`. Protected by `MEMBER_ROSTER_BRIDGE_SECRET`
+ * on **this** deployment (same value as on admin).
+ */
+export const batchLookupByEmailsForBridge = query({
+  args: {
+    emails: v.array(v.string()),
+    bridgeSecret: v.string(),
+  },
+  handler: async (ctx, { emails, bridgeSecret }) => {
+    const expected = process.env.MEMBER_ROSTER_BRIDGE_SECRET;
+    if (!expected || bridgeSecret !== expected) {
+      throw new ConvexError("Unauthorized");
+    }
+    const MAX = 200;
+    if (emails.length > MAX) {
+      throw new ConvexError(`At most ${MAX} emails per request`);
+    }
+
+    const want = new Set<string>();
+    for (const e of emails) {
+      const t = e.trim();
+      if (t) want.add(normalizeEmail(t));
+    }
+
+    const out: Record<string, { its_number: string; name: string }> = {};
+    if (want.size === 0) return out;
+
+    const membersList = await ctx.db.query("members").collect();
+    for (const m of membersList) {
+      if (!m.email?.trim()) continue;
+      const k = normalizeEmail(m.email);
+      if (!want.has(k)) continue;
+      if (!out[k]) {
+        out[k] = { its_number: m.its_number, name: m.name };
+      }
+    }
+    return out;
+  },
+});
