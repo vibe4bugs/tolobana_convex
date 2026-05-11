@@ -353,23 +353,31 @@ export const submit = mutation({
       : undefined;
 
     if (respondentEmail) {
-      const existing = await ctx.db
+      const subsForForm = await ctx.db
         .query("submissions")
-        .withIndex("by_respondent_email", (q) =>
-          q.eq("respondent_email", respondentEmail),
-        )
-        .filter((q) => q.eq(q.field("form_id"), args.formId))
-        .first();
-
-      if (existing) {
+        .withIndex("by_form", (q) => q.eq("form_id", args.formId))
+        .collect();
+      const duplicate = subsForForm.some(
+        (s) =>
+          s.respondent_email &&
+          normalizeEmail(s.respondent_email) === respondentEmail,
+      );
+      if (duplicate) {
         throw new Error("You have already submitted this survey.");
+      }
+    }
+
+    for (const a of args.answers) {
+      const q = await ctx.db.get(a.question_id);
+      if (!q || q.form_id !== args.formId) {
+        throw new Error("Invalid survey answers (question does not belong to this form).");
       }
     }
 
     const submissionId = await ctx.db.insert("submissions", {
       form_id: args.formId,
-      respondent_email: respondentEmail,
       submitted_at: Date.now(),
+      ...(respondentEmail !== undefined ? { respondent_email: respondentEmail } : {}),
     });
 
     for (const answer of args.answers) {
@@ -388,12 +396,16 @@ export const getOwnSubmission = query({
   args: { formId: v.id("forms"), email: v.string() },
   handler: async (ctx, args) => {
     const emailKey = normalizeEmail(args.email);
-    return await ctx.db
+    const subs = await ctx.db
       .query("submissions")
-      .withIndex("by_respondent_email", (q) =>
-        q.eq("respondent_email", emailKey),
-      )
-      .filter((q) => q.eq(q.field("form_id"), args.formId))
-      .unique();
+      .withIndex("by_form", (q) => q.eq("form_id", args.formId))
+      .collect();
+    return (
+      subs.find(
+        (s) =>
+          s.respondent_email &&
+          normalizeEmail(s.respondent_email) === emailKey,
+      ) ?? null
+    );
   },
 });
