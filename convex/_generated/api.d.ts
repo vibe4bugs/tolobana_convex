@@ -18,6 +18,7 @@ import type * as publicAnnouncements from "../publicAnnouncements.js";
 import type * as publicHubCollections from "../publicHubCollections.js";
 import type * as publicSurveys from "../publicSurveys.js";
 import type * as seed from "../seed.js";
+import type * as surveyRosterBridge from "../surveyRosterBridge.js";
 import type * as surveys from "../surveys.js";
 
 import type {
@@ -37,6 +38,7 @@ declare const fullApi: ApiFromModules<{
   publicHubCollections: typeof publicHubCollections;
   publicSurveys: typeof publicSurveys;
   seed: typeof seed;
+  surveyRosterBridge: typeof surveyRosterBridge;
   surveys: typeof surveys;
 }>;
 
