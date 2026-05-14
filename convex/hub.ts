@@ -1,6 +1,11 @@
 import { mutationGeneric as mutation, queryGeneric as query } from "convex/server";
 import { v } from "convex/values";
 
+/** Same normalization as `members.login` / roster import (digits only). */
+function normalizeIts(raw: string): string {
+  return String(raw ?? "").replace(/\D/g, "");
+}
+
 /**
  * List all hub collections (member tooling).
  */
@@ -91,7 +96,13 @@ export const getBySlug = query({
 export const logContribution = mutation({
   args: {
     collectionId: v.id("hub_collections"),
-    memberId: v.id("members"),
+    /**
+     * ITS number of the logged-in member (from the member-portal session).
+     * Resolved on **this** deployment's `members` table so hub writes work
+     * when collections live on the admin Convex app: the session `member._id`
+     * from the member deployment is not a valid `Id<"members">` here.
+     */
+    its_number: v.string(),
     amount: v.number(),
     note: v.optional(v.string()),
   },
@@ -101,9 +112,20 @@ export const logContribution = mutation({
       throw new Error("This collection is no longer active.");
     }
 
-    const member = await ctx.db.get(args.memberId);
+    const its = normalizeIts(args.its_number);
+    if (!its) {
+      throw new Error("Invalid ITS number.");
+    }
+
+    const member = await ctx.db
+      .query("members")
+      .withIndex("by_its_number", (q) => q.eq("its_number", its))
+      .unique();
+
     if (!member) {
-      throw new Error("Invalid member session.");
+      throw new Error(
+        "Your ITS is not on this deployment's roster. Ask an admin to import members here, or try again after roster sync.",
+      );
     }
 
     if (args.amount <= 0) {
@@ -112,7 +134,7 @@ export const logContribution = mutation({
 
     return await ctx.db.insert("hub_contributions", {
       collection_id: args.collectionId,
-      member_id: args.memberId,
+      member_id: member._id,
       amount: args.amount,
       note: args.note,
       logged_at: Date.now(),
