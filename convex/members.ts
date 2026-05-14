@@ -147,3 +147,40 @@ export const batchLookupByEmailsForBridge = query({
     return out;
   },
 });
+
+/**
+ * Member deployment only: called from **admin** `hub.logContribution` action via HTTP
+ * when admin `members` has no row for this ITS (lazy roster sync).
+ * Same secret as `batchLookupByEmailsForBridge` (`MEMBER_ROSTER_BRIDGE_SECRET`).
+ */
+export const lookupByItsForHubBridge = query({
+  args: {
+    its_number: v.string(),
+    bridgeSecret: v.string(),
+  },
+  handler: async (ctx, { its_number, bridgeSecret }) => {
+    const expected = process.env.MEMBER_ROSTER_BRIDGE_SECRET;
+    if (!expected || bridgeSecret !== expected) {
+      throw new ConvexError("Unauthorized");
+    }
+
+    const its = normalizeIts(its_number);
+    if (!its) {
+      return null;
+    }
+
+    const member = await ctx.db
+      .query("members")
+      .withIndex("by_its_number", (q) => q.eq("its_number", its))
+      .unique();
+
+    if (!member) {
+      return null;
+    }
+
+    return {
+      name: member.name,
+      email: member.email,
+    };
+  },
+});
