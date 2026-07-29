@@ -75,6 +75,13 @@ export default defineSchema({
     /** Exact memo text payers should include — surfaced prominently on the public page. */
     desired_memo: v.string(),
     is_live: v.boolean(),
+    /**
+     * Who sees this collection in the member portal Hub.
+     * Missing / undefined treated as `"leadership"` for older rows.
+     */
+    member_portal_audience: v.optional(
+      v.union(v.literal("all_members"), v.literal("leadership")),
+    ),
     created_at: v.number(),
     updated_at: v.number(),
     created_by: v.optional(v.string()),
@@ -89,6 +96,8 @@ export default defineSchema({
     name: v.string(),
     /** Lowercased trimmed for `by_email` (import + survey submit use `normalizeEmail`). */
     email: v.optional(v.string()),
+    /** TKMI roster Designation (e.g. Member, Treasurer) — used for leadership-only Hub campaigns. */
+    designation: v.optional(v.string()),
     created_at: v.number(),
   })
     .index("by_its_number", ["its_number"])
