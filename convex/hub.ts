@@ -7,9 +7,9 @@ import type { Id } from "./_generated/dataModel";
 import {
   action,
   internalMutation,
-  mutation,
   query,
 } from "./_generated/server";
+import { canViewHubCollection } from "./hubAccess";
 
 /** Same normalization as `members.login` / roster import (digits only). */
 function normalizeIts(raw: string): string {
@@ -40,8 +40,11 @@ export const listContributions = query({
 
 /** Live hub collections with totals for the member portal home list. */
 export const listLive = query({
-  args: {},
-  handler: async (ctx) => {
+  args: {
+    /** Viewer designation from member roster; filters leadership-only campaigns. */
+    designation: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
     const collections = await ctx.db
       .query("hub_collections")
       .filter((q) =>
@@ -51,6 +54,10 @@ export const listLive = query({
 
     const results = [];
     for (const collection of collections) {
+      if (!canViewHubCollection(collection.member_portal_audience, args.designation)) {
+        continue;
+      }
+
       const contributions = await ctx.db
         .query("hub_contributions")
         .withIndex("by_collection", (q) => q.eq("collection_id", collection._id))
@@ -72,7 +79,10 @@ export const listLive = query({
 
 /** Collection detail by slug for member hub page. */
 export const getBySlug = query({
-  args: { slug: v.string() },
+  args: {
+    slug: v.string(),
+    designation: v.optional(v.string()),
+  },
   handler: async (ctx, args) => {
     const collection = await ctx.db
       .query("hub_collections")
@@ -80,6 +90,10 @@ export const getBySlug = query({
       .unique();
 
     if (!collection || !collection.is_live || collection.archived) {
+      return null;
+    }
+
+    if (!canViewHubCollection(collection.member_portal_audience, args.designation)) {
       return null;
     }
 
@@ -117,6 +131,7 @@ export const applyLogContribution = internalMutation({
     its: v.string(),
     name: v.string(),
     email: v.optional(v.string()),
+    designation: v.optional(v.string()),
     amount: v.number(),
     note: v.optional(v.string()),
   },
@@ -124,6 +139,11 @@ export const applyLogContribution = internalMutation({
     const collection = await ctx.db.get(args.collectionId);
     if (!collection || !collection.is_live || collection.archived) {
       throw new Error("This collection is no longer active.");
+    }
+    if (!canViewHubCollection(collection.member_portal_audience, args.designation)) {
+      throw new Error(
+        "This campaign is not available for your designation. Contact your administrator if you need access.",
+      );
     }
     if (args.amount <= 0) {
       throw new Error("Amount must be greater than zero.");
@@ -142,6 +162,7 @@ export const applyLogContribution = internalMutation({
         its_number: args.its,
         name: displayName,
         email: args.email,
+        designation: args.designation,
         created_at: now,
       });
       member = await ctx.db.get(id);
@@ -152,6 +173,7 @@ export const applyLogContribution = internalMutation({
       await ctx.db.patch(member._id, {
         name: displayName,
         ...(args.email !== undefined ? { email: args.email } : {}),
+        ...(args.designation !== undefined ? { designation: args.designation } : {}),
       });
       member = (await ctx.db.get(member._id))!;
     }
@@ -201,12 +223,22 @@ export const logContribution = action({
     }
 
     const client = new ConvexHttpClient(memberUrl);
-    let profile: { name: string; email?: string } | null;
+    let profile: {
+      name: string;
+      email?: string;
+      designation?: string;
+      can_access_hub?: boolean;
+    } | null;
     try {
       profile = (await client.query(lookupByItsForHubBridge, {
         its_number: its,
         bridgeSecret,
-      })) as { name: string; email?: string } | null;
+      })) as {
+        name: string;
+        email?: string;
+        designation?: string;
+        can_access_hub?: boolean;
+      } | null;
     } catch (e) {
       console.error("hub.logContribution: member deployment lookup failed", e);
       throw new Error(
@@ -225,6 +257,7 @@ export const logContribution = action({
       its,
       name: profile.name,
       email: profile.email,
+      designation: profile.designation,
       amount: args.amount,
       note: args.note,
     });

@@ -11,10 +11,14 @@
  *   MEMBERS_IMPORT_SECRET="your-secret" \
  *   node scripts/import-members-from-xlsx.mjs ./path/to/members.xlsx
  *
+ * Replace existing roster (upsert + delete ITS not in the file):
+ *   ... node scripts/import-members-from-xlsx.mjs ./path/to/members.xlsx --replace
+ *
  * Expected columns (header row); names are matched case-insensitively:
- *   - itsId (or its_number / ITS / ITS ID / its number) — required
- *   - name (or full name) — required
+ *   - itsId (or its_number / ITS / ITS_ID / its number) — required
+ *   - name (or full name / Full_Name) — required
  *   - email — optional
+ *   - designation — optional (drives Hub visibility)
  *
  * Tip: In Excel, format the ITS column as **Text** so long IDs are not rounded.
  */
@@ -62,7 +66,7 @@ function pickIts(row) {
 
 function pickName(row) {
   const entries = Object.entries(row);
-  const preferred = ["name", "fullname", "membername", "full name"];
+  const preferred = ["name", "fullname", "membername"];
   for (const want of preferred) {
     const hit = entries.find(([k]) => normalizeHeaderKey(k) === want);
     if (hit && String(hit[1]).trim()) return String(hit[1]).trim();
@@ -77,6 +81,16 @@ function pickEmail(row) {
   return undefined;
 }
 
+function pickDesignation(row) {
+  const entries = Object.entries(row);
+  const preferred = ["designation", "role", "title"];
+  for (const want of preferred) {
+    const hit = entries.find(([k]) => normalizeHeaderKey(k) === want);
+    if (hit && String(hit[1]).trim()) return String(hit[1]).trim();
+  }
+  return undefined;
+}
+
 function cellToString(val) {
   if (val == null || val === "") return "";
   if (typeof val === "number") {
@@ -87,14 +101,16 @@ function cellToString(val) {
 }
 
 async function main() {
-  const filePath = process.argv[2];
+  const argv = process.argv.slice(2);
+  const replace = argv.includes("--replace");
+  const filePath = argv.find((a) => !a.startsWith("--"));
   const convexUrl =
     process.env.MEMBER_CONVEX_URL ?? process.env.CONVEX_URL;
   const secret = process.env.MEMBERS_IMPORT_SECRET;
 
   if (!filePath) {
     console.error(
-      "Usage: MEMBER_CONVEX_URL=... MEMBERS_IMPORT_SECRET=... node scripts/import-members-from-xlsx.mjs <file.xlsx>",
+      "Usage: MEMBER_CONVEX_URL=... MEMBERS_IMPORT_SECRET=... node scripts/import-members-from-xlsx.mjs <file.xlsx> [--replace]",
     );
     process.exit(1);
   }
@@ -131,11 +147,13 @@ async function main() {
     const itsRaw = cellToString(pickIts(raw));
     const name = pickName(raw);
     const email = pickEmail(raw);
+    const designation = pickDesignation(raw);
     if (!itsRaw || !name) continue;
     rows.push({
       its_number: itsRaw.replace(/\D/g, ""),
       name,
       email,
+      designation,
     });
   }
 
@@ -145,7 +163,10 @@ async function main() {
     process.exit(1);
   }
 
-  console.log(`Sheet "${sheetName}": ${valid.length} row(s) to upsert.`);
+  const withDesignation = valid.filter((r) => r.designation).length;
+  console.log(
+    `Sheet "${sheetName}": ${valid.length} row(s) to upsert (${withDesignation} with designation).${replace ? " Replace mode: prune ITS not in file." : ""}`,
+  );
 
   const client = new ConvexHttpClient(convexUrl);
   let inserted = 0;
@@ -164,7 +185,19 @@ async function main() {
     );
   }
 
-  console.log(`Done. Total inserted: ${inserted}, total updated: ${updated}.`);
+  let deleted = 0;
+  if (replace) {
+    const prune = await client.mutation(api.members.pruneMembersNotInSet, {
+      secret,
+      keepItsNumbers: valid.map((r) => r.its_number),
+    });
+    deleted = prune.deleted;
+    console.log(`Pruned ${deleted} member(s) not in the spreadsheet (kept ${prune.kept}).`);
+  }
+
+  console.log(
+    `Done. Total inserted: ${inserted}, total updated: ${updated}${replace ? `, deleted: ${deleted}` : ""}.`,
+  );
 }
 
 main().catch((err) => {

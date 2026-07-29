@@ -9,6 +9,7 @@ export const seed = mutation({
       its_number: "12345678",
       name: "John Doe",
       email: normalizeEmail("john@example.com"),
+      designation: "Treasurer",
       created_at: Date.now(),
     });
 
@@ -16,6 +17,7 @@ export const seed = mutation({
       its_number: "87654321",
       name: "Jane Smith",
       email: normalizeEmail("jane@example.com"),
+      designation: "Member",
       created_at: Date.now(),
     });
 
@@ -42,6 +44,7 @@ export const seed = mutation({
       desired_memo: "FOOD-DRIVE-2026",
       payment_url: "https://zelle.example.com/pay?to=tolobana&memo=FOOD-DRIVE-2026",
       is_live: true,
+      member_portal_audience: "all_members",
       created_at: Date.now(),
       updated_at: Date.now(),
     });
@@ -53,6 +56,7 @@ export const seed = mutation({
       desired_memo: "SCHOLARSHIP-2026",
       payment_url: "https://zelle.example.com/pay?to=tolobana&memo=SCHOLARSHIP-2026",
       is_live: true,
+      member_portal_audience: "leadership",
       created_at: Date.now(),
       updated_at: Date.now(),
     });

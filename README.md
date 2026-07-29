@@ -159,13 +159,31 @@ Note the secret name is **`MEMBERS_IMPORT_SECRET`** (not `MEMBER_IMPORT_SECRET`)
 If you see `XLSX.readFile is not a function`, pull the latest `tolobana_convex` — the import script uses the SheetJS default export so it works with Node’s ESM ↔ CommonJS interop.
 
 4. Spreadsheet: first sheet should have a header row. Supported column names (case-insensitive):
-   - **`itsId`** (or `its_number`, `ITS`, etc.) — required; stored as digits-only for lookup.
-   - **`name`** (or `full name`) — required.
+   - **`itsId`** (or `its_number`, `ITS`, `ITS_ID`, etc.) — required; stored as digits-only for lookup.
+   - **`name`** (or `full name` / `Full_Name`) — required.
    - **`email`** — optional.
+   - **`designation`** — optional; drives Hub visibility (see below).
 
 Format the ITS column as **Text** in Excel if IDs are long (avoids rounding).
 
-The dev helper mutation `seed` still inserts sample members (`12345678`, …) — do not run it in production, or delete those rows after importing your roster.
+To **replace** the current roster (upsert everyone in the file, then delete ITS numbers that are no longer present):
+
+```bash
+MEMBER_CONVEX_URL="https://YOUR_MEMBER_DEPLOYMENT.convex.cloud" \
+MEMBERS_IMPORT_SECRET="same-as-dashboard" \
+npm run import-members -- /path/to/members.xlsx --replace
+```
+
+### Hub access by designation / audience
+
+Each hub collection has **`member_portal_audience`** (set in admin Details):
+
+- **`all_members`** — every signed-in member sees the campaign in Hub
+- **`leadership`** (default) — only these designations: Treasurer, Secretary, Joint Secretary, Joint Treasurer, Coordinator, Patron, Management Member
+
+The Hub nav appears when the member can see **at least one** live collection. Public `/collect/:slug` pages are unchanged.
+
+`members.login` still returns `designation` and `can_access_hub` (leadership flag). Adjust the leadership allow-list in `convex/hubAccess.ts`.
 
 ### Admin survey responses (`its_id` / `name` columns)
 

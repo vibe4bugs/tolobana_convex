@@ -12,6 +12,7 @@ import type * as announcements from "../announcements.js";
 import type * as auth from "../auth.js";
 import type * as email from "../email.js";
 import type * as hub from "../hub.js";
+import type * as hubAccess from "../hubAccess.js";
 import type * as hubCollections from "../hubCollections.js";
 import type * as members from "../members.js";
 import type * as publicAnnouncements from "../publicAnnouncements.js";
@@ -32,6 +33,7 @@ declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   email: typeof email;
   hub: typeof hub;
+  hubAccess: typeof hubAccess;
   hubCollections: typeof hubCollections;
   members: typeof members;
   publicAnnouncements: typeof publicAnnouncements;

@@ -4,6 +4,11 @@ import { requireIdentity } from "./auth";
 
 const slugRegex = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
+const memberPortalAudienceValidator = v.union(
+  v.literal("all_members"),
+  v.literal("leadership"),
+);
+
 function normalizeSlug(raw: string): string {
   return raw
     .trim()
@@ -62,6 +67,7 @@ export const createHubCollection = mutation({
       payment_url: "",
       desired_memo: "",
       is_live: false,
+      member_portal_audience: "leadership",
       created_at: now,
       updated_at: now,
       created_by: identity.subject,
@@ -77,6 +83,7 @@ export const updateHubCollection = mutation({
     amount_display: v.string(),
     payment_url: v.string(),
     desired_memo: v.string(),
+    member_portal_audience: memberPortalAudienceValidator,
   },
   handler: async (ctx, args) => {
     await requireIdentity(ctx);
@@ -101,6 +108,7 @@ export const updateHubCollection = mutation({
       amount_display: args.amount_display.trim(),
       payment_url: args.payment_url.trim(),
       desired_memo: args.desired_memo.trim(),
+      member_portal_audience: args.member_portal_audience,
       updated_at: Date.now(),
     });
   },

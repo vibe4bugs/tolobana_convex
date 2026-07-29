@@ -1,6 +1,7 @@
 import { mutationGeneric as mutation, queryGeneric as query } from "convex/server";
 import { ConvexError, v } from "convex/values";
 import { normalizeEmail } from "./email";
+import { canAccessHub, normalizeDesignation } from "./hubAccess";
 
 /** Normalize ITS for lookup/storage: digits only (matches spreadsheet itsId imports). */
 function normalizeIts(raw: string): string {
@@ -33,6 +34,8 @@ export const login = mutation({
       name: member.name,
       its_number: member.its_number,
       email: member.email,
+      designation: member.designation,
+      can_access_hub: canAccessHub(member.designation),
     };
   },
 });
@@ -41,6 +44,7 @@ const memberRow = v.object({
   its_number: v.string(),
   name: v.string(),
   email: v.optional(v.string()),
+  designation: v.optional(v.string()),
 });
 
 /**
@@ -72,6 +76,7 @@ export const importMembersBulk = mutation({
       if (!name) continue;
 
       const email = row.email?.trim() ? normalizeEmail(row.email) : undefined;
+      const designation = normalizeDesignation(row.designation);
 
       const existing = await ctx.db
         .query("members")
@@ -82,6 +87,7 @@ export const importMembersBulk = mutation({
         await ctx.db.patch(existing._id, {
           name,
           email,
+          designation,
         });
         updated += 1;
       } else {
@@ -89,6 +95,7 @@ export const importMembersBulk = mutation({
           its_number,
           name,
           email,
+          designation,
           created_at: now,
         });
         inserted += 1;
@@ -96,6 +103,38 @@ export const importMembersBulk = mutation({
     }
 
     return { inserted, updated, total: inserted + updated };
+  },
+});
+
+/**
+ * After a full roster import, delete members whose ITS is not in `keepItsNumbers`.
+ * Protected by the same `MEMBERS_IMPORT_SECRET` as bulk import.
+ */
+export const pruneMembersNotInSet = mutation({
+  args: {
+    secret: v.string(),
+    keepItsNumbers: v.array(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const expected = process.env.MEMBERS_IMPORT_SECRET;
+    if (!expected || args.secret !== expected) {
+      throw new ConvexError("Unauthorized");
+    }
+
+    const keep = new Set(
+      args.keepItsNumbers.map((n) => normalizeIts(n)).filter(Boolean),
+    );
+
+    let deleted = 0;
+    const all = await ctx.db.query("members").collect();
+    for (const m of all) {
+      if (!keep.has(m.its_number)) {
+        await ctx.db.delete(m._id);
+        deleted += 1;
+      }
+    }
+
+    return { deleted, kept: keep.size };
   },
 });
 
@@ -181,6 +220,8 @@ export const lookupByItsForHubBridge = query({
     return {
       name: member.name,
       email: member.email,
+      designation: member.designation,
+      can_access_hub: canAccessHub(member.designation),
     };
   },
 });
