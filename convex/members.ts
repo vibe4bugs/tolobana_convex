@@ -248,6 +248,83 @@ export const lookupByItsForHubBridge = query({
 });
 
 /**
+ * Same-jamaat roster for chapter secretaries logging leadership hub pledges.
+ * Used by admin `hub.jamaatRosterForLogging` via HTTP bridge.
+ */
+export const jamaatRosterForItsBridge = query({
+  args: {
+    its_number: v.string(),
+    bridgeSecret: v.string(),
+  },
+  handler: async (ctx, { its_number, bridgeSecret }) => {
+    const expected = process.env.MEMBER_ROSTER_BRIDGE_SECRET;
+    if (!expected || bridgeSecret !== expected) {
+      throw new ConvexError("Unauthorized");
+    }
+
+    const its = normalizeIts(its_number);
+    if (!its) return null;
+
+    const self = await ctx.db
+      .query("members")
+      .withIndex("by_its_number", (q) => q.eq("its_number", its))
+      .unique();
+
+    if (!self) return null;
+
+    const jamaat = (self.jamaat ?? "").trim();
+    if (!jamaat) {
+      return {
+        jamaat: null as string | null,
+        logger: {
+          its_number: self.its_number,
+          name: self.name,
+          designation: self.designation,
+          jamaat: self.jamaat,
+          email: self.email,
+          coordinator: self.coordinator,
+          can_access_hub: canAccessHub(self.designation),
+        },
+        members: [] as {
+          its_number: string;
+          name: string;
+          designation?: string;
+          email?: string;
+        }[],
+      };
+    }
+
+    const peers = await ctx.db
+      .query("members")
+      .withIndex("by_jamaat", (q) => q.eq("jamaat", jamaat))
+      .collect();
+
+    const members = peers
+      .map((m) => ({
+        its_number: m.its_number,
+        name: m.name,
+        designation: m.designation,
+        email: m.email,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    return {
+      jamaat,
+      logger: {
+        its_number: self.its_number,
+        name: self.name,
+        designation: self.designation,
+        jamaat: self.jamaat,
+        email: self.email,
+        coordinator: self.coordinator,
+        can_access_hub: canAccessHub(self.designation),
+      },
+      members,
+    };
+  },
+});
+
+/**
  * POC (Coordinator) roster scope: jamaats + members under this coordinator's name.
  * Used by admin `hub.pocNiyyatTotals` via HTTP bridge.
  */

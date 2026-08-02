@@ -111,15 +111,41 @@ export default defineSchema({
 
   /**
    * Member-reported contributions toward a hub_collection (niyyat / intent logged).
+   *
+   * Leadership chapter pledges: one row per Zelle/payment from the secretary.
+   * `amount` is the payment total; `breakdown` lists who pledged how much (must sum to amount).
+   * Personal / all-members logs: single amount, no breakdown.
    */
   hub_contributions: defineTable({
     collection_id: v.id("hub_collections"),
+    /** Payer / primary attribution — secretary for chapter batches; self for personal logs. */
     member_id: v.id("members"),
     amount: v.number(),
     note: v.optional(v.string()),
     logged_at: v.number(),
     /** Snapshot of contributor jamaat at log time (for POC reporting). */
     jamaat: v.optional(v.string()),
+    /**
+     * Who submitted the portal log (e.g. chapter secretary).
+     * For chapter batches this matches the payer (member_id).
+     */
+    logged_by_its: v.optional(v.string()),
+    logged_by_name: v.optional(v.string()),
+    /**
+     * Per-member pledge lines for chapter batches. Sum must equal `amount`.
+     * Omitted for simple personal contributions.
+     */
+    breakdown: v.optional(
+      v.array(
+        v.object({
+          its_number: v.string(),
+          name: v.string(),
+          email: v.optional(v.string()),
+          amount: v.number(),
+          jamaat: v.optional(v.string()),
+        }),
+      ),
+    ),
     /** Admin confirmed matching payment was received. */
     payment_verified: v.optional(v.boolean()),
     payment_verified_at: v.optional(v.number()),
