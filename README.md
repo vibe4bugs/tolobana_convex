@@ -163,6 +163,8 @@ If you see `XLSX.readFile is not a function`, pull the latest `tolobana_convex` 
    - **`name`** (or `full name` / `Full_Name`) — required.
    - **`email`** — optional.
    - **`designation`** — optional; drives Hub visibility (see below).
+   - **`jamaat`** — optional; used for POC jamaat totals.
+   - **`coordinator`** — optional; POC name from TKMI export.
 
 Format the ITS column as **Text** in Excel if IDs are long (avoids rounding).
 
@@ -174,7 +176,19 @@ MEMBERS_IMPORT_SECRET="same-as-dashboard" \
 npm run import-members -- /path/to/members.xlsx --replace
 ```
 
-### Hub access by designation / audience
+## Hub contributions (admin review)
+
+Logged contributions are written to the **`hub_contributions`** table on the admin Convex
+deployment. There is **no automated email**. Admins review them in **Admin → Hub Contributions**:
+verify payment matched, personally send a receipt to the contributor, then mark receipt forwarded.
+
+### POC jamaat niyyat
+
+Roster import stores `jamaat` + `coordinator`. Members with **Designation = Coordinator** see
+a POC section on Account with per-jamaat totals of logged contributions for members under
+their Coordinator name.
+
+Re-import the TKMI XLSX with `--replace` after deploying so jamaat/coordinator fields populate.
 
 Each hub collection has **`member_portal_audience`** (set in admin Details):
 
