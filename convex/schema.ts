@@ -98,13 +98,19 @@ export default defineSchema({
     email: v.optional(v.string()),
     /** TKMI roster Designation (e.g. Member, Treasurer) — used for leadership-only Hub campaigns. */
     designation: v.optional(v.string()),
+    /** TKMI Jamaat (e.g. HOUSTON TX). */
+    jamaat: v.optional(v.string()),
+    /** TKMI Coordinator name — POC who oversees this member's jamaat. */
+    coordinator: v.optional(v.string()),
     created_at: v.number(),
   })
     .index("by_its_number", ["its_number"])
-    .index("by_email", ["email"]),
+    .index("by_email", ["email"])
+    .index("by_coordinator", ["coordinator"])
+    .index("by_jamaat", ["jamaat"]),
 
   /**
-   * Member-reported contributions toward a hub_collection.
+   * Member-reported contributions toward a hub_collection (niyyat / intent logged).
    */
   hub_contributions: defineTable({
     collection_id: v.id("hub_collections"),
@@ -112,8 +118,16 @@ export default defineSchema({
     amount: v.number(),
     note: v.optional(v.string()),
     logged_at: v.number(),
+    /** Snapshot of contributor jamaat at log time (for POC reporting). */
+    jamaat: v.optional(v.string()),
+    /** Admin confirmed matching payment was received. */
+    payment_verified: v.optional(v.boolean()),
+    payment_verified_at: v.optional(v.number()),
+    /** Admin personally forwarded the receipt to the contributor. */
+    receipt_forwarded_at: v.optional(v.number()),
   })
     .index("by_collection", ["collection_id"])
     .index("by_member", ["member_id"])
-    .index("by_collection_and_member", ["collection_id", "member_id"]),
+    .index("by_collection_and_member", ["collection_id", "member_id"])
+    .index("by_logged_at", ["logged_at"]),
 });
