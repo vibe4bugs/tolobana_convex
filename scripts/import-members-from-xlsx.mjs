@@ -91,6 +91,26 @@ function pickDesignation(row) {
   return undefined;
 }
 
+function pickJamaat(row) {
+  const entries = Object.entries(row);
+  const preferred = ["jamaat", "masjid", "branch"];
+  for (const want of preferred) {
+    const hit = entries.find(([k]) => normalizeHeaderKey(k) === want);
+    if (hit && String(hit[1]).trim()) return String(hit[1]).trim();
+  }
+  return undefined;
+}
+
+function pickCoordinator(row) {
+  const entries = Object.entries(row);
+  const preferred = ["coordinator", "poc", "zonecoordinator"];
+  for (const want of preferred) {
+    const hit = entries.find(([k]) => normalizeHeaderKey(k) === want);
+    if (hit && String(hit[1]).trim()) return String(hit[1]).trim();
+  }
+  return undefined;
+}
+
 function cellToString(val) {
   if (val == null || val === "") return "";
   if (typeof val === "number") {
@@ -148,12 +168,16 @@ async function main() {
     const name = pickName(raw);
     const email = pickEmail(raw);
     const designation = pickDesignation(raw);
+    const jamaat = pickJamaat(raw);
+    const coordinator = pickCoordinator(raw);
     if (!itsRaw || !name) continue;
     rows.push({
       its_number: itsRaw.replace(/\D/g, ""),
       name,
       email,
       designation,
+      jamaat,
+      coordinator,
     });
   }
 
