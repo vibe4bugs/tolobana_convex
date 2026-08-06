@@ -17,7 +17,9 @@ export const getLiveHubBySlug = query({
       title: doc.title,
       amount_display: doc.amount_display,
       payment_url: doc.payment_url,
+      zelle_contact: doc.zelle_contact ?? "",
       desired_memo: doc.desired_memo,
+      verification_sla_business_days: doc.verification_sla_business_days,
       updated_at: doc.updated_at,
     };
   },

@@ -13,6 +13,11 @@ import {
 } from "./_generated/server";
 import { requireIdentity } from "./auth";
 import { canViewHubCollection } from "./hubAccess";
+import {
+  allocateReferenceCode,
+  defaultExpiresAt,
+  effectivePaymentStatus,
+} from "./zelleConfig";
 
 /** Same normalization as `members.login` / roster import (digits only). */
 function normalizeIts(raw: string): string {
@@ -112,8 +117,10 @@ export const listContributionsForAdmin = query({
     for (const c of rows) {
       const member = await ctx.db.get(c.member_id);
       const collection = await ctx.db.get(c.collection_id);
+      const status = effectivePaymentStatus(c);
       out.push({
         ...c,
+        status,
         member_name: member?.name ?? "Unknown",
         member_its: member?.its_number ?? "",
         member_email: member?.email,
@@ -122,25 +129,39 @@ export const listContributionsForAdmin = query({
         collection_title: collection?.title ?? "Unknown collection",
         collection_slug: collection?.slug ?? "",
         desired_memo: collection?.desired_memo ?? "",
+        zelle_contact: collection?.zelle_contact ?? "",
       });
     }
     return out;
   },
 });
 
+/** @deprecated Prefer zellePayments.markVerified / markRejected. */
 export const setContributionPaymentVerified = mutation({
   args: {
     contributionId: v.id("hub_contributions"),
     verified: v.boolean(),
   },
   handler: async (ctx, { contributionId, verified }) => {
-    await requireIdentity(ctx);
+    const identity = await requireIdentity(ctx);
     const doc = await ctx.db.get(contributionId);
     if (!doc) throw new Error("Not found");
-    await ctx.db.patch(contributionId, {
-      payment_verified: verified,
-      payment_verified_at: verified ? Date.now() : undefined,
-    });
+    if (verified) {
+      await ctx.db.patch(contributionId, {
+        status: "verified",
+        payment_verified: true,
+        payment_verified_at: Date.now(),
+        verified_by: identity.subject,
+        rejection_reason: undefined,
+      });
+    } else {
+      await ctx.db.patch(contributionId, {
+        status: "pending_verification",
+        payment_verified: false,
+        payment_verified_at: undefined,
+        verified_by: undefined,
+      });
+    }
   },
 });
 
@@ -209,14 +230,20 @@ export const listLive = query({
         .withIndex("by_collection", (q) => q.eq("collection_id", collection._id))
         .collect();
 
-      const totalRaised = contributions.reduce((sum, c) => sum + c.amount, 0);
+      const countable = contributions.filter((c) => {
+        const s = effectivePaymentStatus(c);
+        return s !== "rejected" && s !== "expired";
+      });
+      const totalRaised = countable
+        .filter((c) => effectivePaymentStatus(c) === "verified")
+        .reduce((sum, c) => sum + c.amount, 0);
       const nameById = new Map<Id<"members">, string>();
-      for (const c of contributions) {
+      for (const c of countable) {
         if (nameById.has(c.member_id)) continue;
         const m = await ctx.db.get(c.member_id);
         if (m) nameById.set(c.member_id, m.name);
       }
-      const contributorNames = contributorNamesFromRows(contributions, nameById);
+      const contributorNames = contributorNamesFromRows(countable, nameById);
 
       results.push({
         ...collection,
@@ -254,15 +281,21 @@ export const getBySlug = query({
       .withIndex("by_collection", (q) => q.eq("collection_id", collection._id))
       .collect();
 
-    const totalRaised = contributions.reduce((sum, c) => sum + c.amount, 0);
+    const countable = contributions.filter((c) => {
+      const s = effectivePaymentStatus(c);
+      return s !== "rejected" && s !== "expired";
+    });
+    const totalRaised = countable
+      .filter((c) => effectivePaymentStatus(c) === "verified")
+      .reduce((sum, c) => sum + c.amount, 0);
 
     const nameById = new Map<Id<"members">, string>();
-    for (const c of contributions) {
+    for (const c of countable) {
       if (nameById.has(c.member_id)) continue;
       const m = await ctx.db.get(c.member_id);
       if (m) nameById.set(c.member_id, m.name);
     }
-    const contributorNames = contributorNamesFromRows(contributions, nameById);
+    const contributorNames = contributorNamesFromRows(countable, nameById);
 
     return {
       ...collection,
@@ -342,12 +375,17 @@ export const applyLogContribution = internalMutation({
       member = (await ctx.db.get(member._id))!;
     }
 
+    const reference_code = await allocateReferenceCode(ctx);
     const contributionId = await ctx.db.insert("hub_contributions", {
       collection_id: args.collectionId,
       member_id: member._id,
       amount: args.amount,
+      currency: "USD",
+      reference_code,
+      status: "pending_payment",
       note: args.note,
       logged_at: now,
+      expires_at: defaultExpiresAt(now),
       jamaat: args.jamaat ?? member.jamaat,
       ...(args.logged_by_its
         ? {
@@ -498,12 +536,17 @@ export const applyLogChapterPledges = internalMutation({
       jamaat: e.jamaat,
     }));
 
+    const reference_code = await allocateReferenceCode(ctx);
     const contributionId = await ctx.db.insert("hub_contributions", {
       collection_id: args.collectionId,
       member_id: payer._id,
       amount: args.pledged_amount,
+      currency: "USD",
+      reference_code,
+      status: "pending_payment",
       note: args.note,
       logged_at: now,
+      expires_at: defaultExpiresAt(now),
       jamaat: args.logger.jamaat ?? payer.jamaat,
       logged_by_its: args.logger.its,
       logged_by_name: payerName,
@@ -886,7 +929,7 @@ export const listAllContributionsInternal = internalQuery({
             amount: line.amount,
             logged_at: c.logged_at,
             collection_title: collectionTitle,
-            payment_verified: c.payment_verified,
+            payment_verified: effectivePaymentStatus(c) === "verified",
           });
         }
         continue;
@@ -899,7 +942,7 @@ export const listAllContributionsInternal = internalQuery({
         amount: c.amount,
         logged_at: c.logged_at,
         collection_title: collectionTitle,
-        payment_verified: c.payment_verified,
+        payment_verified: effectivePaymentStatus(c) === "verified",
       });
     }
     return out;

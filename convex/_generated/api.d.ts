@@ -10,6 +10,7 @@
 
 import type * as announcements from "../announcements.js";
 import type * as auth from "../auth.js";
+import type * as crons from "../crons.js";
 import type * as email from "../email.js";
 import type * as hub from "../hub.js";
 import type * as hubAccess from "../hubAccess.js";
@@ -21,6 +22,8 @@ import type * as publicSurveys from "../publicSurveys.js";
 import type * as seed from "../seed.js";
 import type * as surveyRosterBridge from "../surveyRosterBridge.js";
 import type * as surveys from "../surveys.js";
+import type * as zelleConfig from "../zelleConfig.js";
+import type * as zellePayments from "../zellePayments.js";
 
 import type {
   ApiFromModules,
@@ -31,6 +34,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   announcements: typeof announcements;
   auth: typeof auth;
+  crons: typeof crons;
   email: typeof email;
   hub: typeof hub;
   hubAccess: typeof hubAccess;
@@ -42,6 +46,8 @@ declare const fullApi: ApiFromModules<{
   seed: typeof seed;
   surveyRosterBridge: typeof surveyRosterBridge;
   surveys: typeof surveys;
+  zelleConfig: typeof zelleConfig;
+  zellePayments: typeof zellePayments;
 }>;
 
 /**

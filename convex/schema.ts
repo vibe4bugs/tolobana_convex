@@ -70,10 +70,26 @@ export default defineSchema({
     slug: v.string(),
     /** Shown on the public page, e.g. "$25.00" or "Suggested amount: $50". */
     amount_display: v.string(),
-    /** Where the payer completes payment (Venmo/PayPal/bank portal deep link, etc.). */
+    /**
+     * Optional legacy deep link (Venmo/PayPal/etc.). Zelle has no universal deep link —
+     * prefer `zelle_contact` for the manual Zelle flow.
+     */
     payment_url: v.string(),
-    /** Exact memo text payers should include — surfaced prominently on the public page. */
+    /**
+     * Organization's Zelle-registered email or phone. Encoded as plain text in QR codes;
+     * donors copy this into their bank's Zelle send flow.
+     */
+    zelle_contact: v.optional(v.string()),
+    /**
+     * Optional campaign memo hint. Per-payment `reference_code` (REF-####) is the
+     * primary memo donors are asked to include when their bank supports notes.
+     */
     desired_memo: v.string(),
+    /**
+     * Business days shown to donors after confirmation ("we'll verify within X days").
+     * Defaults to 3 when unset.
+     */
+    verification_sla_business_days: v.optional(v.number()),
     is_live: v.boolean(),
     /**
      * Who sees this collection in the member portal Hub.
@@ -110,7 +126,11 @@ export default defineSchema({
     .index("by_jamaat", ["jamaat"]),
 
   /**
-   * Member-reported contributions toward a hub_collection (niyyat / intent logged).
+   * Member-reported Zelle payment requests toward a hub_collection.
+   *
+   * Status machine: pending_payment → pending_verification → verified | rejected
+   * (or expired if never claimed). Donor confirmation is a claim, not proof —
+   * staff must match against the actual bank deposit.
    *
    * Leadership chapter pledges: one row per Zelle/payment from the secretary.
    * `amount` is the payment total; `breakdown` lists who pledged how much (must sum to amount).
@@ -120,7 +140,27 @@ export default defineSchema({
     collection_id: v.id("hub_collections"),
     /** Payer / primary attribution — secretary for chapter batches; self for personal logs. */
     member_id: v.id("members"),
+    /** Amount expected (editable by staff during reconciliation if donor sent a different amount). */
     amount: v.number(),
+    currency: v.optional(v.string()),
+    /**
+     * Unique short code shown to the donor (e.g. REF-8321) for the Zelle memo/note field.
+     * Best-effort — not all bank Zelle UIs support memos.
+     */
+    reference_code: v.optional(v.string()),
+    /**
+     * pending_payment | pending_verification | verified | rejected | expired
+     * Legacy rows without status: treat payment_verified as verified, else pending_verification.
+     */
+    status: v.optional(
+      v.union(
+        v.literal("pending_payment"),
+        v.literal("pending_verification"),
+        v.literal("verified"),
+        v.literal("rejected"),
+        v.literal("expired"),
+      ),
+    ),
     note: v.optional(v.string()),
     logged_at: v.number(),
     /** Snapshot of contributor jamaat at log time (for POC reporting). */
@@ -146,14 +186,54 @@ export default defineSchema({
         }),
       ),
     ),
-    /** Admin confirmed matching payment was received. */
+    /** Primary confirmation number / last-4 from the donor's bank (format varies). */
+    confirmation_number: v.optional(v.string()),
+    /** Screenshot of Zelle confirmation (Convex storage). */
+    confirmation_screenshot_id: v.optional(v.id("_storage")),
+    /** When the donor says they sent the Zelle transfer. */
+    donor_claimed_sent_at: v.optional(v.number()),
+    /**
+     * Additional confirmation submissions when a donor sends multiple partial
+     * transfers toward one payment record. Sum of optional per-line amounts
+     * is informational for staff; `amount` remains the expected total.
+     */
+    confirmations: v.optional(
+      v.array(
+        v.object({
+          confirmation_number: v.string(),
+          screenshot_id: v.optional(v.id("_storage")),
+          claimed_sent_at: v.number(),
+          amount: v.optional(v.number()),
+          submitted_at: v.number(),
+        }),
+      ),
+    ),
+    /** Set when the same confirmation_number appears on another payment record. */
+    duplicate_confirmation_flag: v.optional(v.boolean()),
+    /** Staff-only free text (not shown to donor). */
+    staff_notes: v.optional(v.string()),
+    /** Required when status → rejected; visible to the donor. */
+    rejection_reason: v.optional(v.string()),
+    /** When pending_payment should auto-expire if never claimed. */
+    expires_at: v.optional(v.number()),
+    /**
+     * Reserved for a future Plaid (or similar) auto-reconciliation job.
+     * Do not populate in this phase.
+     */
+    matched_bank_transaction_id: v.optional(v.string()),
+    /** Admin confirmed matching payment was received (mirrors status === verified). */
     payment_verified: v.optional(v.boolean()),
     payment_verified_at: v.optional(v.number()),
+    /** Clerk subject (or staff id) who verified. */
+    verified_by: v.optional(v.string()),
     /** Admin personally forwarded the receipt to the contributor. */
     receipt_forwarded_at: v.optional(v.number()),
   })
     .index("by_collection", ["collection_id"])
     .index("by_member", ["member_id"])
     .index("by_collection_and_member", ["collection_id", "member_id"])
-    .index("by_logged_at", ["logged_at"]),
+    .index("by_logged_at", ["logged_at"])
+    .index("by_status", ["status"])
+    .index("by_reference_code", ["reference_code"])
+    .index("by_confirmation_number", ["confirmation_number"]),
 });

@@ -82,7 +82,9 @@ export const updateHubCollection = mutation({
     slug: v.string(),
     amount_display: v.string(),
     payment_url: v.string(),
+    zelle_contact: v.optional(v.string()),
     desired_memo: v.string(),
+    verification_sla_business_days: v.optional(v.number()),
     member_portal_audience: memberPortalAudienceValidator,
   },
   handler: async (ctx, args) => {
@@ -102,12 +104,18 @@ export const updateHubCollection = mutation({
         throw new Error("That slug is already in use.");
       }
     }
+    const sla = args.verification_sla_business_days;
+    if (sla !== undefined && (!Number.isFinite(sla) || sla < 1 || sla > 30)) {
+      throw new Error("Verification SLA must be between 1 and 30 business days.");
+    }
     await ctx.db.patch(args.hubId, {
       title: args.title.trim() || "Untitled collection",
       slug: normalized,
       amount_display: args.amount_display.trim(),
       payment_url: args.payment_url.trim(),
+      zelle_contact: args.zelle_contact?.trim() || undefined,
       desired_memo: args.desired_memo.trim(),
+      ...(sla !== undefined ? { verification_sla_business_days: Math.round(sla) } : {}),
       member_portal_audience: args.member_portal_audience,
       updated_at: Date.now(),
     });
@@ -128,11 +136,14 @@ export const setHubCollectionLive = mutation({
       if (!doc.amount_display.trim()) {
         throw new Error("Add the amount or amount label before publishing.");
       }
-      if (!doc.payment_url.trim() || !looksLikeHttpUrl(doc.payment_url)) {
-        throw new Error("Add a valid payment link (https://…) before publishing.");
-      }
-      if (!doc.desired_memo.trim()) {
-        throw new Error("Add the desired memo text before publishing.");
+      const hasZelle = !!(doc.zelle_contact && doc.zelle_contact.trim());
+      const hasUrl =
+        !!(doc.payment_url && doc.payment_url.trim()) &&
+        looksLikeHttpUrl(doc.payment_url);
+      if (!hasZelle && !hasUrl) {
+        throw new Error(
+          "Add a Zelle email/phone (or a valid payment link) before publishing.",
+        );
       }
     }
 
