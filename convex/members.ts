@@ -380,3 +380,163 @@ export const pocScopeForItsBridge = query({
     };
   },
 });
+
+function assertBridgeSecret(bridgeSecret: string) {
+  const expected = process.env.MEMBER_ROSTER_BRIDGE_SECRET;
+  if (!expected || bridgeSecret !== expected) {
+    throw new ConvexError("Unauthorized");
+  }
+}
+
+function serializeMember(m: {
+  its_number: string;
+  name: string;
+  email?: string;
+  designation?: string;
+  jamaat?: string;
+  coordinator?: string;
+  created_at: number;
+}) {
+  return {
+    its_number: m.its_number,
+    name: m.name,
+    email: m.email,
+    designation: m.designation,
+    jamaat: m.jamaat,
+    coordinator: m.coordinator,
+    created_at: m.created_at,
+  };
+}
+
+/**
+ * Full roster for admin Members UI. Called from admin `membersAdmin.listMembers`
+ * via HTTP bridge (`MEMBER_ROSTER_BRIDGE_SECRET`).
+ */
+export const listAllForBridge = query({
+  args: { bridgeSecret: v.string() },
+  handler: async (ctx, { bridgeSecret }) => {
+    assertBridgeSecret(bridgeSecret);
+    const rows = await ctx.db.query("members").collect();
+    rows.sort((a, b) => a.name.localeCompare(b.name));
+    return rows.map(serializeMember);
+  },
+});
+
+/**
+ * Create a single roster row on the **member** deployment (login source of truth).
+ */
+export const createForBridge = mutation({
+  args: {
+    bridgeSecret: v.string(),
+    its_number: v.string(),
+    name: v.string(),
+    email: v.optional(v.string()),
+    designation: v.optional(v.string()),
+    jamaat: v.optional(v.string()),
+    coordinator: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    assertBridgeSecret(args.bridgeSecret);
+
+    const its_number = normalizeIts(args.its_number);
+    if (!its_number) {
+      throw new ConvexError("ITS number is required.");
+    }
+    const name = args.name.trim();
+    if (!name) {
+      throw new ConvexError("Name is required.");
+    }
+
+    const existing = await ctx.db
+      .query("members")
+      .withIndex("by_its_number", (q) => q.eq("its_number", its_number))
+      .unique();
+    if (existing) {
+      throw new ConvexError(`A member with ITS ${its_number} already exists.`);
+    }
+
+    const email = args.email?.trim() ? normalizeEmail(args.email) : undefined;
+    const designation = normalizeDesignation(args.designation);
+    const jamaat = optionalTrim(args.jamaat);
+    const coordinator = optionalTrim(args.coordinator);
+    const created_at = Date.now();
+
+    await ctx.db.insert("members", {
+      its_number,
+      name,
+      email,
+      designation,
+      jamaat,
+      coordinator,
+      created_at,
+    });
+
+    return serializeMember({
+      its_number,
+      name,
+      email,
+      designation,
+      jamaat,
+      coordinator,
+      created_at,
+    });
+  },
+});
+
+/**
+ * Update a roster row by ITS. ITS itself is immutable after creation.
+ */
+export const updateForBridge = mutation({
+  args: {
+    bridgeSecret: v.string(),
+    its_number: v.string(),
+    name: v.string(),
+    email: v.optional(v.string()),
+    designation: v.optional(v.string()),
+    jamaat: v.optional(v.string()),
+    coordinator: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    assertBridgeSecret(args.bridgeSecret);
+
+    const its = normalizeIts(args.its_number);
+    if (!its) {
+      throw new ConvexError("ITS number is required.");
+    }
+    const name = args.name.trim();
+    if (!name) {
+      throw new ConvexError("Name is required.");
+    }
+
+    const member = await ctx.db
+      .query("members")
+      .withIndex("by_its_number", (q) => q.eq("its_number", its))
+      .unique();
+    if (!member) {
+      throw new ConvexError("Member not found.");
+    }
+
+    const email = args.email?.trim() ? normalizeEmail(args.email) : undefined;
+    const designation = normalizeDesignation(args.designation);
+    const jamaat = optionalTrim(args.jamaat);
+    const coordinator = optionalTrim(args.coordinator);
+
+    await ctx.db.patch(member._id, {
+      name,
+      email,
+      designation,
+      jamaat,
+      coordinator,
+    });
+
+    return serializeMember({
+      its_number: member.its_number,
+      name,
+      email,
+      designation,
+      jamaat,
+      coordinator,
+      created_at: member.created_at,
+    });
+  },
+});
