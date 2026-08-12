@@ -3,7 +3,12 @@ import type { FunctionReference } from "convex/server";
 import { makeFunctionReference } from "convex/server";
 import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
-import { action, internalMutation } from "./_generated/server";
+import {
+  action,
+  internalMutation,
+  query,
+} from "./_generated/server";
+import { requireIdentity } from "./auth";
 
 /** Avoid importing `./_generated/api` public refs here (circular types with bridge refs). */
 const listAllForBridge = makeFunctionReference(
@@ -25,6 +30,16 @@ export type AdminMemberRow = {
   coordinator?: string;
   created_at: number;
 };
+
+const memberRowValidator = v.object({
+  its_number: v.string(),
+  name: v.string(),
+  email: v.optional(v.string()),
+  designation: v.optional(v.string()),
+  jamaat: v.optional(v.string()),
+  coordinator: v.optional(v.string()),
+  created_at: v.number(),
+});
 
 function requireMemberRosterClient(): {
   client: ConvexHttpClient;
@@ -62,7 +77,11 @@ function bridgeErrorMessage(err: unknown): string {
       if (typeof message === "string" && message.trim()) return message;
     }
   }
-  if (err instanceof Error && err.message.trim()) return err.message;
+  if (err instanceof Error && err.message.trim()) {
+    const uncaught = err.message.match(/Uncaught ConvexError:\s*(.+)/);
+    if (uncaught?.[1]) return uncaught[1].split("\n")[0]!.trim();
+    return err.message;
+  }
   return "Member roster request failed.";
 }
 
@@ -78,6 +97,7 @@ export const upsertLocalMember = internalMutation({
     designation: v.optional(v.string()),
     jamaat: v.optional(v.string()),
     coordinator: v.optional(v.string()),
+    created_at: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const member = await ctx.db
@@ -103,24 +123,97 @@ export const upsertLocalMember = internalMutation({
       designation: args.designation,
       jamaat: args.jamaat,
       coordinator: args.coordinator,
-      created_at: Date.now(),
+      created_at: args.created_at ?? Date.now(),
     });
   },
 });
 
-/** List the login roster from the member Convex deployment. */
-export const listMembers = action({
+/** Bulk upsert local mirror after a roster sync from the member deployment. */
+export const upsertLocalMembersBulk = internalMutation({
+  args: { rows: v.array(memberRowValidator) },
+  handler: async (ctx, { rows }) => {
+    let upserted = 0;
+    for (const row of rows) {
+      const existing = await ctx.db
+        .query("members")
+        .withIndex("by_its_number", (q) => q.eq("its_number", row.its_number))
+        .unique();
+      if (existing) {
+        await ctx.db.patch(existing._id, {
+          name: row.name,
+          email: row.email,
+          designation: row.designation,
+          jamaat: row.jamaat,
+          coordinator: row.coordinator,
+        });
+      } else {
+        await ctx.db.insert("members", {
+          its_number: row.its_number,
+          name: row.name,
+          email: row.email,
+          designation: row.designation,
+          jamaat: row.jamaat,
+          coordinator: row.coordinator,
+          created_at: row.created_at,
+        });
+      }
+      upserted += 1;
+    }
+    return { upserted };
+  },
+});
+
+/**
+ * List roster rows from the admin-local mirror (filled by `syncMembers` /
+ * create / update). Prefer this over a large cross-deployment action return.
+ */
+export const listMembers = query({
   args: {},
-  handler: async (ctx): Promise<AdminMemberRow[]> => {
+  handler: async (ctx) => {
+    await requireIdentity(ctx);
+    const rows = await ctx.db.query("members").collect();
+    rows.sort((a, b) => a.name.localeCompare(b.name));
+    return rows.map((m) => ({
+      its_number: m.its_number,
+      name: m.name,
+      email: m.email,
+      designation: m.designation,
+      jamaat: m.jamaat,
+      coordinator: m.coordinator,
+      created_at: m.created_at,
+    }));
+  },
+});
+
+/** Pull the login roster from the member deployment into the admin mirror. */
+export const syncMembers = action({
+  args: {},
+  handler: async (ctx): Promise<{ upserted: number }> => {
     await requireAdminIdentity(ctx);
     const { client, bridgeSecret } = requireMemberRosterClient();
+
+    let rows: AdminMemberRow[];
     try {
-      return (await client.query(listAllForBridge, {
+      rows = (await client.query(listAllForBridge, {
         bridgeSecret,
       })) as AdminMemberRow[];
     } catch (err) {
+      console.error("membersAdmin.syncMembers: bridge list failed", err);
       throw new ConvexError(bridgeErrorMessage(err));
     }
+
+    // Chunk to stay within mutation limits on large rosters.
+    const CHUNK = 100;
+    let upserted = 0;
+    for (let i = 0; i < rows.length; i += CHUNK) {
+      const slice = rows.slice(i, i + CHUNK);
+      const result = await ctx.runMutation(
+        internal.membersAdmin.upsertLocalMembersBulk,
+        { rows: slice },
+      );
+      upserted += result.upserted;
+    }
+    return { upserted };
   },
 });
 
@@ -150,6 +243,7 @@ export const createMember = action({
         coordinator: args.coordinator,
       })) as AdminMemberRow;
     } catch (err) {
+      console.error("membersAdmin.createMember: bridge create failed", err);
       throw new ConvexError(bridgeErrorMessage(err));
     }
 
@@ -160,6 +254,7 @@ export const createMember = action({
       designation: row.designation,
       jamaat: row.jamaat,
       coordinator: row.coordinator,
+      created_at: row.created_at,
     });
 
     return row;
@@ -192,6 +287,7 @@ export const updateMember = action({
         coordinator: args.coordinator,
       })) as AdminMemberRow;
     } catch (err) {
+      console.error("membersAdmin.updateMember: bridge update failed", err);
       throw new ConvexError(bridgeErrorMessage(err));
     }
 
@@ -202,6 +298,7 @@ export const updateMember = action({
       designation: row.designation,
       jamaat: row.jamaat,
       coordinator: row.coordinator,
+      created_at: row.created_at,
     });
 
     return row;
