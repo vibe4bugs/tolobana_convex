@@ -16,7 +16,6 @@ import type * as hub from "../hub.js";
 import type * as hubAccess from "../hubAccess.js";
 import type * as hubCollections from "../hubCollections.js";
 import type * as members from "../members.js";
-import type * as membersAdmin from "../membersAdmin.js";
 import type * as publicAnnouncements from "../publicAnnouncements.js";
 import type * as publicHubCollections from "../publicHubCollections.js";
 import type * as publicSurveys from "../publicSurveys.js";
@@ -41,7 +40,6 @@ declare const fullApi: ApiFromModules<{
   hubAccess: typeof hubAccess;
   hubCollections: typeof hubCollections;
   members: typeof members;
-  membersAdmin: typeof membersAdmin;
   publicAnnouncements: typeof publicAnnouncements;
   publicHubCollections: typeof publicHubCollections;
   publicSurveys: typeof publicSurveys;
