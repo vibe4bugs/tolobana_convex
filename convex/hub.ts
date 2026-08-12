@@ -295,13 +295,12 @@ export const getBySlug = query({
       const m = await ctx.db.get(c.member_id);
       if (m) nameById.set(c.member_id, m.name);
     }
-    const contributorNames = contributorNamesFromRows(countable, nameById);
+    const contributorCount = contributorNamesFromRows(countable, nameById).length;
 
     return {
       ...collection,
       totalRaised,
-      contributorCount: contributorNames.length,
-      contributorNames,
+      contributorCount,
     };
   },
 });
