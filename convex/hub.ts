@@ -301,6 +301,8 @@ export const getBySlug = query({
       ...collection,
       totalRaised,
       contributorCount,
+      // Empty for older cached clients that still read `.contributorNames.length`.
+      contributorNames: [] as string[],
     };
   },
 });
