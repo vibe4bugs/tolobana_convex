@@ -1,7 +1,7 @@
 import { ConvexHttpClient } from "convex/browser";
 import type { FunctionReference } from "convex/server";
 import { makeFunctionReference } from "convex/server";
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import {
@@ -659,6 +659,8 @@ export const logChapterPledges = action({
       v.object({
         its_number: v.string(),
         amount: v.number(),
+        /** Optional display name when ITS is not on the member roster (manual rows). */
+        name: v.optional(v.string()),
       }),
     ),
     note: v.optional(v.string()),
@@ -669,24 +671,24 @@ export const logChapterPledges = action({
   ): Promise<{ count: number; id: Id<"hub_contributions"> }> => {
     const loggerIts = normalizeIts(args.logger_its);
     if (!loggerIts) {
-      throw new Error("Invalid ITS number.");
+      throw new ConvexError("Invalid ITS number.");
     }
     if (!Number.isFinite(args.pledged_amount) || args.pledged_amount <= 0) {
-      throw new Error("Pledged amount must be greater than zero.");
+      throw new ConvexError("Pledged amount must be greater than zero.");
     }
     if (args.entries.length === 0) {
-      throw new Error("Add at least one member amount to log.");
+      throw new ConvexError("Add at least one member amount to log.");
     }
 
     let breakdownSumCents = 0;
     for (const raw of args.entries) {
       if (!Number.isFinite(raw.amount) || raw.amount <= 0) {
-        throw new Error("Each breakdown amount must be greater than zero.");
+        throw new ConvexError("Each breakdown amount must be greater than zero.");
       }
       breakdownSumCents += moneyCents(raw.amount);
     }
     if (breakdownSumCents !== moneyCents(args.pledged_amount)) {
-      throw new Error(
+      throw new ConvexError(
         `Member breakdown ($${(breakdownSumCents / 100).toFixed(2)}) must equal the pledged amount ($${args.pledged_amount.toFixed(2)}).`,
       );
     }
@@ -701,12 +703,12 @@ export const logChapterPledges = action({
       })) as HubBridgeProfile | null;
     } catch (e) {
       console.error("hub.logChapterPledges: logger lookup failed", e);
-      throw new Error(
+      throw new ConvexError(
         "Could not verify your ITS with the member directory. Try again later or contact support.",
       );
     }
     if (!logger) {
-      throw new Error(
+      throw new ConvexError(
         "ITS not recognised — sign in with an ITS that exists on the member roster.",
       );
     }
@@ -724,7 +726,7 @@ export const logChapterPledges = action({
     for (const raw of args.entries) {
       const its = normalizeIts(raw.its_number);
       if (!its) {
-        throw new Error("Each pledge line needs a valid ITS number.");
+        throw new ConvexError("Each pledge line needs a valid ITS number.");
       }
 
       let profile: HubBridgeProfile | null;
@@ -735,21 +737,35 @@ export const logChapterPledges = action({
         })) as HubBridgeProfile | null;
       } catch (e) {
         console.error("hub.logChapterPledges: pledger lookup failed", e);
-        throw new Error(
+        throw new ConvexError(
           `Could not look up ITS ${its} in the member directory. Try again later.`,
         );
       }
-      if (!profile) {
-        throw new Error(`ITS ${its} was not found on the member roster.`);
+
+      if (profile) {
+        resolved.push({
+          its,
+          name: profile.name,
+          email: profile.email,
+          designation: profile.designation,
+          jamaat: profile.jamaat,
+          coordinator: profile.coordinator,
+          amount: raw.amount,
+        });
+        continue;
+      }
+
+      const manualName = String(raw.name ?? "").trim();
+      if (!manualName) {
+        throw new ConvexError(
+          `ITS ${its} was not found on the member roster. Enter their name in the extra row, or add them under Admin → Members first.`,
+        );
       }
 
       resolved.push({
         its,
-        name: profile.name,
-        email: profile.email,
-        designation: profile.designation,
-        jamaat: profile.jamaat,
-        coordinator: profile.coordinator,
+        name: manualName,
+        jamaat: logger.jamaat,
         amount: raw.amount,
       });
     }
