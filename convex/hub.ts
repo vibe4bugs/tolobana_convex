@@ -425,6 +425,8 @@ export const applyLogChapterPledges = internalMutation({
         jamaat: v.optional(v.string()),
         coordinator: v.optional(v.string()),
         amount: v.number(),
+        /** False for manual off-roster lines — breakdown only, no admin members row. */
+        mirror_to_admin: v.boolean(),
       }),
     ),
     note: v.optional(v.string()),
@@ -497,8 +499,10 @@ export const applyLogChapterPledges = internalMutation({
       payer = (await ctx.db.get(payer._id))!;
     }
 
-    // Keep roster snapshots for breakdown members (for email / POC).
+    // Roster-backed breakdown members only — never mirror manual off-roster ITS.
     for (const entry of args.entries) {
+      if (!entry.mirror_to_admin) continue;
+
       let member = await ctx.db
         .query("members")
         .withIndex("by_its_number", (q) => q.eq("its_number", entry.its))
@@ -721,6 +725,8 @@ export const logChapterPledges = action({
       jamaat?: string;
       coordinator?: string;
       amount: number;
+      /** When false, do not create/update admin `members` (manual off-roster lines). */
+      mirror_to_admin: boolean;
     }[] = [];
 
     for (const raw of args.entries) {
@@ -751,6 +757,7 @@ export const logChapterPledges = action({
           jamaat: profile.jamaat,
           coordinator: profile.coordinator,
           amount: raw.amount,
+          mirror_to_admin: true,
         });
         continue;
       }
@@ -767,6 +774,7 @@ export const logChapterPledges = action({
         name: manualName,
         jamaat: logger.jamaat,
         amount: raw.amount,
+        mirror_to_admin: false,
       });
     }
 
