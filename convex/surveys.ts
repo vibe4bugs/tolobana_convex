@@ -1,6 +1,6 @@
 import { mutationGeneric as mutation, queryGeneric as query } from "convex/server";
 import { ConvexError, v } from "convex/values";
-import { requireIdentity } from "./auth";
+import { requireIdentity } from "./requireIdentity";
 import { normalizeEmail } from "./email";
 import { questionType } from "./schema";
 

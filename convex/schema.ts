@@ -1,3 +1,4 @@
+import { authTables } from "@convex-dev/auth/server";
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
@@ -14,6 +15,7 @@ export const questionType = v.union(
 );
 
 export default defineSchema({
+  ...authTables,
   forms: defineTable({
     title: v.string(),
     description: v.optional(v.string()),
@@ -236,4 +238,16 @@ export default defineSchema({
     .index("by_status", ["status"])
     .index("by_reference_code", ["reference_code"])
     .index("by_confirmation_number", ["confirmation_number"]),
+
+  /**
+   * One active email code per ITS. The code is stored as a hash.
+   * Issued only when that ITS is already on `members` and has an email.
+   */
+  sign_in_codes: defineTable({
+    its_number: v.string(),
+    code_hash: v.string(),
+    expires_at: v.number(),
+    attempts: v.number(),
+    sent_at: v.number(),
+  }).index("by_its_number", ["its_number"]),
 });

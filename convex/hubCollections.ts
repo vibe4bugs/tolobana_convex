@@ -1,6 +1,6 @@
 import { mutationGeneric as mutation, queryGeneric as query } from "convex/server";
 import { v } from "convex/values";
-import { requireIdentity } from "./auth";
+import { requireIdentity } from "./requireIdentity";
 
 const slugRegex = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 

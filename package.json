@@ -12,6 +12,8 @@
     "import-members": "node scripts/import-members-from-xlsx.mjs"
   },
   "dependencies": {
+    "@auth/core": "^0.41.1",
+    "@convex-dev/auth": "^0.0.98",
     "convex": "^1.35.1"
   },
   "devDependencies": {

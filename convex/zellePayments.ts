@@ -9,7 +9,7 @@ import {
   mutation,
   query,
 } from "./_generated/server";
-import { requireIdentity } from "./auth";
+import { requireIdentity } from "./requireIdentity";
 import {
   DEFAULT_VERIFICATION_SLA_BUSINESS_DAYS,
   PENDING_PAYMENT_EXPIRY_DAYS,

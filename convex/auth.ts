@@ -1,13 +1,52 @@
-import type { GenericMutationCtx, GenericQueryCtx } from "convex/server";
-import { ConvexError } from "convex/values";
-import type { DataModel } from "./_generated/dataModel";
+import { ConvexCredentials } from "@convex-dev/auth/providers/ConvexCredentials";
+import {
+  convexAuth,
+  createAccount,
+  retrieveAccount,
+} from "@convex-dev/auth/server";
+import { internal } from "./_generated/api";
 
-export async function requireIdentity(
-  ctx: GenericQueryCtx<DataModel> | GenericMutationCtx<DataModel>
-) {
-  const identity = await ctx.auth.getUserIdentity();
-  if (!identity) {
-    throw new ConvexError("Unauthorized");
-  }
-  return identity;
-}
+/**
+ * Member sign-in. The client sends an ITS number and the email code.
+ * `authorize` accepts the pair only after `memberSignIn.consumeCode`
+ * has checked the roster and the code.
+ */
+export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
+  providers: [
+    ConvexCredentials({
+      id: "its",
+      authorize: async (credentials, ctx) => {
+        const its_number =
+          typeof credentials.its_number === "string" ? credentials.its_number : "";
+        const code = typeof credentials.code === "string" ? credentials.code : "";
+        const member = await ctx.runMutation(internal.memberSignIn.consumeCode, {
+          its_number,
+          code,
+        });
+
+        try {
+          const existing = await retrieveAccount(ctx, {
+            provider: "its",
+            account: { id: member.its_number },
+          });
+          return { userId: existing.user._id };
+        } catch (error) {
+          if (!(error instanceof Error) || error.message !== "InvalidAccountId") {
+            throw error;
+          }
+        }
+
+        const created = await createAccount(ctx, {
+          provider: "its",
+          account: { id: member.its_number },
+          profile: {
+            name: member.name,
+            email: member.email,
+            emailVerificationTime: Date.now(),
+          },
+        });
+        return { userId: created.user._id };
+      },
+    }),
+  ],
+});

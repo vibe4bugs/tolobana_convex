@@ -8,7 +8,7 @@ import {
   internalMutation,
   query,
 } from "./_generated/server";
-import { requireIdentity } from "./auth";
+import { requireIdentity } from "./requireIdentity";
 
 /** Avoid importing `./_generated/api` public refs here (circular types with bridge refs). */
 const listAllForBridge = makeFunctionReference(
