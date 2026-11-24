@@ -1,6 +1,6 @@
 import { mutationGeneric as mutation, queryGeneric as query } from "convex/server";
 import { v } from "convex/values";
-import { requireIdentity } from "./auth";
+import { requireIdentity } from "./requireIdentity";
 
 export const listAnnouncements = query({
   handler: async (ctx) => {

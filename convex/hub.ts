@@ -11,7 +11,7 @@ import {
   mutation,
   query,
 } from "./_generated/server";
-import { requireIdentity } from "./auth";
+import { requireIdentity } from "./requireIdentity";
 import { canViewHubCollection } from "./hubAccess";
 import {
   allocateReferenceCode,

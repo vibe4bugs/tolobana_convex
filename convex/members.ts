@@ -1,3 +1,4 @@
+import { getAuthUserId } from "@convex-dev/auth/server";
 import { mutationGeneric as mutation, queryGeneric as query } from "convex/server";
 import { ConvexError, v } from "convex/values";
 import { normalizeEmail, normalizePersonName } from "./email";
@@ -13,9 +14,37 @@ function optionalTrim(raw: string | undefined): string | undefined {
   return t || undefined;
 }
 
+function memberProfile(member: {
+  _id: string;
+  name: string;
+  its_number: string;
+  email?: string;
+  designation?: string;
+  jamaat?: string;
+  coordinator?: string;
+}) {
+  const isPoc =
+    normalizeDesignation(member.designation)?.toLowerCase() === "coordinator";
+
+  return {
+    _id: member._id,
+    name: member.name,
+    its_number: member.its_number,
+    email: member.email,
+    designation: member.designation,
+    jamaat: member.jamaat,
+    coordinator: member.coordinator,
+    can_access_hub: canAccessHub(member.designation),
+    is_poc: isPoc,
+  };
+}
+
 /**
  * Lookup a member by their ITS number.
  * Returns the member object if found, null otherwise.
+ *
+ * The member portal no longer uses this for a session. It remains so the
+ * currently deployed portal can still sign in until that frontend ships.
  */
 export const login = mutation({
   args: { its_number: v.string() },
@@ -34,20 +63,33 @@ export const login = mutation({
       return null;
     }
 
-    const isPoc =
-      normalizeDesignation(member.designation)?.toLowerCase() === "coordinator";
+    return memberProfile(member);
+  },
+});
 
-    return {
-      _id: member._id,
-      name: member.name,
-      its_number: member.its_number,
-      email: member.email,
-      designation: member.designation,
-      jamaat: member.jamaat,
-      coordinator: member.coordinator,
-      can_access_hub: canAccessHub(member.designation),
-      is_poc: isPoc,
-    };
+/** The roster row for the signed-in Convex Auth user, or null. */
+export const me = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return null;
+
+    const accounts = await ctx.db
+      .query("authAccounts")
+      .withIndex("userIdAndProvider", (q) => q.eq("userId", userId))
+      .collect();
+    const account = accounts.find((row) => row.provider === "its");
+    if (!account) return null;
+
+    const member = await ctx.db
+      .query("members")
+      .withIndex("by_its_number", (q) =>
+        q.eq("its_number", account.providerAccountId),
+      )
+      .unique();
+    if (!member) return null;
+
+    return memberProfile(member);
   },
 });
 
