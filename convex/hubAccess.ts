@@ -24,6 +24,39 @@ export function normalizeDesignation(raw: string | undefined | null): string | u
   return t || undefined;
 }
 
+/**
+ * What a signed-in designation is allowed to do, beyond viewing campaigns.
+ * Secretary and Joint Secretary share the same actions.
+ */
+const ROLE_ACTIONS = {
+  secretary: ["log_chapter_pledges"],
+  "joint secretary": ["log_chapter_pledges"],
+  coordinator: ["poc_niyyat"],
+} as const;
+
+type MappedRole = keyof typeof ROLE_ACTIONS;
+type RoleAction = (typeof ROLE_ACTIONS)[MappedRole][number];
+
+function actionsForDesignation(
+  designation: string | undefined | null,
+): readonly RoleAction[] {
+  const key = normalizeDesignation(designation)?.toLowerCase();
+  if (!key || !(key in ROLE_ACTIONS)) return [];
+  return ROLE_ACTIONS[key as MappedRole];
+}
+
+export function canLogChapterPledges(
+  designation: string | undefined | null,
+): boolean {
+  return actionsForDesignation(designation).includes("log_chapter_pledges");
+}
+
+export function isCoordinatorDesignation(
+  designation: string | undefined | null,
+): boolean {
+  return actionsForDesignation(designation).includes("poc_niyyat");
+}
+
 /** Whether this roster designation counts as leadership for restricted campaigns. */
 export function isLeadershipDesignation(
   designation: string | undefined | null,

@@ -2,7 +2,12 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 import { mutationGeneric as mutation, queryGeneric as query } from "convex/server";
 import { ConvexError, v } from "convex/values";
 import { normalizeEmail, normalizePersonName } from "./email";
-import { canAccessHub, normalizeDesignation } from "./hubAccess";
+import {
+  canAccessHub,
+  canLogChapterPledges,
+  isCoordinatorDesignation,
+  normalizeDesignation,
+} from "./hubAccess";
 
 /** Normalize ITS for lookup/storage: digits only (matches spreadsheet itsId imports). */
 function normalizeIts(raw: string): string {
@@ -23,9 +28,6 @@ function memberProfile(member: {
   jamaat?: string;
   coordinator?: string;
 }) {
-  const isPoc =
-    normalizeDesignation(member.designation)?.toLowerCase() === "coordinator";
-
   return {
     _id: member._id,
     name: member.name,
@@ -35,7 +37,8 @@ function memberProfile(member: {
     jamaat: member.jamaat,
     coordinator: member.coordinator,
     can_access_hub: canAccessHub(member.designation),
-    is_poc: isPoc,
+    is_poc: isCoordinatorDesignation(member.designation),
+    is_secretary: canLogChapterPledges(member.designation),
   };
 }
 
@@ -313,6 +316,11 @@ export const jamaatRosterForItsBridge = query({
       .unique();
 
     if (!self) return null;
+    if (!canLogChapterPledges(self.designation)) {
+      throw new ConvexError(
+        "Chapter pledges are logged by a secretary or joint secretary.",
+      );
+    }
 
     const jamaat = (self.jamaat ?? "").trim();
     if (!jamaat) {
@@ -391,9 +399,7 @@ export const pocScopeForItsBridge = query({
 
     if (!self) return null;
 
-    const isPoc =
-      normalizeDesignation(self.designation)?.toLowerCase() === "coordinator";
-    if (!isPoc) {
+    if (!isCoordinatorDesignation(self.designation)) {
       return { is_poc: false as const };
     }
 
