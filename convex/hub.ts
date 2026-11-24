@@ -12,7 +12,7 @@ import {
   query,
 } from "./_generated/server";
 import { requireIdentity } from "./requireIdentity";
-import { canViewHubCollection } from "./hubAccess";
+import { canLogChapterPledges, canViewHubCollection } from "./hubAccess";
 import {
   allocateReferenceCode,
   defaultExpiresAt,
@@ -443,6 +443,11 @@ export const applyLogChapterPledges = internalMutation({
         "This campaign is not available for your designation. Contact your administrator if you need access.",
       );
     }
+    if (!canLogChapterPledges(args.viewer_designation)) {
+      throw new Error(
+        "Chapter pledges are logged by a secretary or joint secretary.",
+      );
+    }
     if (!Number.isFinite(args.pledged_amount) || args.pledged_amount <= 0) {
       throw new Error("Pledged amount must be greater than zero.");
     }
@@ -637,6 +642,26 @@ export const jamaatRosterForLogging = action({
     }
 
     const { client, bridgeSecret } = requireMemberRosterClient();
+    let profile: HubBridgeProfile | null;
+    try {
+      profile = (await client.query(lookupByItsForHubBridge, {
+        its_number: its,
+        bridgeSecret,
+      })) as HubBridgeProfile | null;
+    } catch (e) {
+      console.error("hub.jamaatRosterForLogging: member lookup failed", e);
+      throw new Error("Could not load your jamaat roster. Try again later.");
+    }
+    if (!profile) {
+      throw new ConvexError(
+        "ITS not recognised — sign in with an ITS that exists on the member roster.",
+      );
+    }
+    if (!canLogChapterPledges(profile.designation)) {
+      throw new ConvexError(
+        "Chapter pledges are logged by a secretary or joint secretary.",
+      );
+    }
     try {
       return await client.query(jamaatRosterForItsBridge, {
         its_number: its,
@@ -714,6 +739,11 @@ export const logChapterPledges = action({
     if (!logger) {
       throw new ConvexError(
         "ITS not recognised — sign in with an ITS that exists on the member roster.",
+      );
+    }
+    if (!canLogChapterPledges(logger.designation)) {
+      throw new ConvexError(
+        "Chapter pledges are logged by a secretary or joint secretary.",
       );
     }
 
