@@ -96,6 +96,27 @@ export const me = query({
   },
 });
 
+/** City counts for the signed-in jamaat map. Names and ITS numbers stay off this query. */
+export const jamaatCityCounts = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return null;
+
+    const members = await ctx.db.query("members").collect();
+    const counts = new Map<string, number>();
+    for (const member of members) {
+      const jamaat = String(member.jamaat ?? "").trim();
+      if (!jamaat) continue;
+      counts.set(jamaat, (counts.get(jamaat) ?? 0) + 1);
+    }
+
+    return [...counts.entries()]
+      .map(([jamaat, count]) => ({ jamaat, count }))
+      .sort((a, b) => b.count - a.count || a.jamaat.localeCompare(b.jamaat));
+  },
+});
+
 const memberRow = v.object({
   its_number: v.string(),
   name: v.string(),
