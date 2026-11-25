@@ -16,6 +16,7 @@ import type * as http from "../http.js";
 import type * as hub from "../hub.js";
 import type * as hubAccess from "../hubAccess.js";
 import type * as hubCollections from "../hubCollections.js";
+import type * as jamaatTransfers from "../jamaatTransfers.js";
 import type * as memberSignIn from "../memberSignIn.js";
 import type * as memberSignInAction from "../memberSignInAction.js";
 import type * as members from "../members.js";
@@ -45,6 +46,7 @@ declare const fullApi: ApiFromModules<{
   hub: typeof hub;
   hubAccess: typeof hubAccess;
   hubCollections: typeof hubCollections;
+  jamaatTransfers: typeof jamaatTransfers;
   memberSignIn: typeof memberSignIn;
   memberSignInAction: typeof memberSignInAction;
   members: typeof members;

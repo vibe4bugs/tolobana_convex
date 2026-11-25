@@ -250,4 +250,25 @@ export default defineSchema({
     attempts: v.number(),
     sent_at: v.number(),
   }).index("by_its_number", ["its_number"]),
+
+  /**
+   * A secretary asks another jamaat to take a member.
+   * The member stays put until a secretary of the destination jamaat accepts.
+   */
+  jamaat_transfers: defineTable({
+    member_id: v.id("members"),
+    from_jamaat: v.string(),
+    to_jamaat: v.string(),
+    requested_by: v.id("members"),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("accepted"),
+      v.literal("declined"),
+      v.literal("cancelled"),
+    ),
+    created_at: v.number(),
+    resolved_at: v.optional(v.number()),
+    resolved_by: v.optional(v.id("members")),
+  })
+    .index("by_status", ["status"]),
 });
