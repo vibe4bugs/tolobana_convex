@@ -1,5 +1,7 @@
 import { mutationGeneric as mutation, queryGeneric as query } from "convex/server";
 import { v } from "convex/values";
+import { internal } from "./_generated/api";
+import { clip } from "./push";
 import { requireIdentity } from "./requireIdentity";
 
 export const listAnnouncements = query({
@@ -74,6 +76,14 @@ export const setAnnouncementLive = mutation({
       is_live,
       updated_at: Date.now(),
     });
+
+    if (is_live && !doc.is_live) {
+      await ctx.scheduler.runAfter(0, internal.pushRelay.broadcast, {
+        title: clip(doc.title, 80) || "Update",
+        body: clip(doc.body),
+        url: "/announcements",
+      });
+    }
   },
 });
 

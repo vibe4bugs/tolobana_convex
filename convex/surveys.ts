@@ -1,5 +1,7 @@
 import { mutationGeneric as mutation, queryGeneric as query } from "convex/server";
 import { ConvexError, v } from "convex/values";
+import { internal } from "./_generated/api";
+import { clip } from "./push";
 import { requireIdentity } from "./requireIdentity";
 import { normalizeEmail } from "./email";
 import { questionType } from "./schema";
@@ -160,6 +162,14 @@ export const setSurveyLive = mutation({
       is_live,
       updated_at: Date.now(),
     });
+
+    if (is_live && !form.is_live) {
+      await ctx.scheduler.runAfter(0, internal.pushRelay.broadcast, {
+        title: clip(form.title, 80) || "Survey",
+        body: clip(form.description?.trim() || "A new survey is ready."),
+        url: `/surveys/${form.slug}`,
+      });
+    }
   },
 });
 
