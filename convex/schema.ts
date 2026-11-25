@@ -271,4 +271,19 @@ export default defineSchema({
     resolved_by: v.optional(v.id("members")),
   })
     .index("by_status", ["status"]),
+
+  /**
+   * Web Push subscriptions for members who turned notifications on.
+   * One row per device. The private VAPID key never lives here.
+   */
+  push_subscriptions: defineTable({
+    member_id: v.id("members"),
+    endpoint: v.string(),
+    p256dh: v.string(),
+    auth: v.string(),
+    created_at: v.number(),
+    updated_at: v.number(),
+  })
+    .index("by_member", ["member_id"])
+    .index("by_endpoint", ["endpoint"]),
 });

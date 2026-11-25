@@ -6,8 +6,10 @@ import {
   type GenericQueryCtx,
 } from "convex/server";
 import { ConvexError, v } from "convex/values";
-import type { DataModel } from "./_generated/dataModel";
+import { internal } from "./_generated/api";
+import type { DataModel, Id } from "./_generated/dataModel";
 import { canLogChapterPledges } from "./hubAccess";
+import { clip } from "./push";
 
 type DbCtx = GenericQueryCtx<DataModel> | GenericMutationCtx<DataModel>;
 
@@ -61,6 +63,36 @@ async function requireMember(ctx: DbCtx) {
   const member = await signedInMember(ctx);
   if (!member) throw new ConvexError("Sign in to continue.");
   return member;
+}
+
+type RosterRow = {
+  _id: Id<"members">;
+  name: string;
+  jamaat?: string;
+  designation?: string;
+};
+
+async function notifyMembers(
+  ctx: GenericMutationCtx<DataModel>,
+  memberIds: Id<"members">[],
+  title: string,
+  body: string,
+) {
+  const unique = [...new Set(memberIds)];
+  if (unique.length === 0) return;
+  await ctx.scheduler.runAfter(0, internal.pushSend.toMembers, {
+    memberIds: unique,
+    title: clip(title, 80),
+    body: clip(body),
+    url: "/my-jamaat",
+  });
+}
+
+function officersFor(members: RosterRow[], jamaat: string) {
+  const key = jamaatKey(jamaat);
+  return members
+    .filter((row) => jamaatKey(row.jamaat) === key && canLogChapterPledges(row.designation))
+    .map((row) => row._id);
 }
 
 function assertSecretary(member: { designation?: string; jamaat?: string }) {
@@ -177,6 +209,12 @@ export const requestTransfer = mutation({
       status: "pending",
       created_at: Date.now(),
     });
+    await notifyMembers(
+      ctx,
+      officersFor(members, destination.jamaat),
+      "Transfer request",
+      `${member.name} is waiting to join your jamaat from ${String(member.jamaat).trim()}.`,
+    );
     return null;
   },
 });
@@ -206,6 +244,21 @@ export const acceptTransfer = mutation({
       resolved_at: Date.now(),
       resolved_by: caller._id,
     });
+    const roster = await ctx.db.query("members").collect();
+    await notifyMembers(
+      ctx,
+      [member._id],
+      "Jamaat updated",
+      `Your jamaat is now ${transfer.to_jamaat}.`,
+    );
+    await notifyMembers(
+      ctx,
+      [...officersFor(roster, transfer.from_jamaat), transfer.requested_by].filter(
+        (id) => id !== member._id,
+      ),
+      "Transfer accepted",
+      `${member.name}'s move to ${transfer.to_jamaat} was accepted.`,
+    );
     return null;
   },
 });
@@ -229,6 +282,13 @@ export const declineTransfer = mutation({
       resolved_at: Date.now(),
       resolved_by: caller._id,
     });
+    const member = await ctx.db.get(transfer.member_id);
+    await notifyMembers(
+      ctx,
+      [transfer.requested_by],
+      "Transfer declined",
+      `${member?.name ?? "A member"}'s move to ${transfer.to_jamaat} was declined.`,
+    );
     return null;
   },
 });
@@ -252,6 +312,14 @@ export const cancelTransfer = mutation({
       resolved_at: Date.now(),
       resolved_by: caller._id,
     });
+    const members = await ctx.db.query("members").collect();
+    const member = members.find((row) => row._id === transfer.member_id);
+    await notifyMembers(
+      ctx,
+      officersFor(members, transfer.to_jamaat),
+      "Transfer cancelled",
+      `${member?.name ?? "A member"}'s transfer was cancelled.`,
+    );
     return null;
   },
 });
