@@ -26,7 +26,9 @@ export const broadcast = internalAction({
   handler: async (ctx, args) => {
     const memberUrl = process.env.MEMBER_ROSTER_CONVEX_URL?.trim().replace(/\/$/, "");
     const bridgeSecret = process.env.MEMBER_ROSTER_BRIDGE_SECRET;
-    if (!memberUrl || !bridgeSecret) {
+    const selfUrl = process.env.CONVEX_CLOUD_URL?.trim().replace(/\/$/, "");
+    const sendHere = process.env.PUSH_SEND_HERE === "1" || !memberUrl || !bridgeSecret || (selfUrl && memberUrl === selfUrl);
+    if (sendHere) {
       await ctx.runAction(internal.pushSend.broadcast, args);
       return;
     }
