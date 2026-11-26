@@ -252,8 +252,8 @@ export default defineSchema({
   }).index("by_its_number", ["its_number"]),
 
   /**
-   * A secretary asks another jamaat to take a member.
-   * The member stays put until a secretary of the destination jamaat accepts.
+   * Jamaat leadership asks another jamaat to take a member.
+   * The member stays put until leadership of the destination jamaat accepts.
    */
   jamaat_transfers: defineTable({
     member_id: v.id("members"),
