@@ -8,7 +8,7 @@ import {
 import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { DataModel, Id } from "./_generated/dataModel";
-import { canLogChapterPledges } from "./hubAccess";
+import { isLeadershipDesignation } from "./hubAccess";
 import { clip } from "./push";
 
 type DbCtx = GenericQueryCtx<DataModel> | GenericMutationCtx<DataModel>;
@@ -88,23 +88,23 @@ async function notifyMembers(
   });
 }
 
-function officersFor(members: RosterRow[], jamaat: string) {
-  const key = jamaatKey(jamaat);
+function leadershipFor(members: RosterRow[], ...jamaats: string[]) {
+  const keys = new Set(jamaats.map((jamaat) => jamaatKey(jamaat)).filter(Boolean));
   return members
-    .filter((row) => jamaatKey(row.jamaat) === key && canLogChapterPledges(row.designation))
+    .filter((row) => keys.has(jamaatKey(row.jamaat)) && isLeadershipDesignation(row.designation))
     .map((row) => row._id);
 }
 
-function assertSecretary(member: { designation?: string; jamaat?: string }) {
-  if (!canLogChapterPledges(member.designation)) {
-    throw new ConvexError("Only a secretary or joint secretary can transfer members.");
+function assertLeadership(member: { designation?: string; jamaat?: string }) {
+  if (!isLeadershipDesignation(member.designation)) {
+    throw new ConvexError("Only jamaat leadership can transfer members.");
   }
   if (!jamaatKey(member.jamaat)) {
     throw new ConvexError("Your membership has no jamaat.");
   }
 }
 
-/** Members of the signed-in person's jamaat, plus transfer tools for secretaries. */
+/** Members of the signed-in person's jamaat, plus transfer tools for leadership. */
 export const myJamaat = query({
   args: {},
   handler: async (ctx) => {
@@ -136,7 +136,7 @@ export const myJamaat = query({
           a.name.localeCompare(b.name),
       );
 
-    const canTransfer = canLogChapterPledges(caller.designation) && Boolean(home);
+    const canTransfer = isLeadershipDesignation(caller.designation) && Boolean(home);
     const cities = canTransfer
       ? [...new Set(members.map((member) => String(member.jamaat ?? "").trim()).filter(Boolean))]
           .filter((jamaat) => jamaatKey(jamaat) !== home)
@@ -176,7 +176,7 @@ export const requestTransfer = mutation({
   },
   handler: async (ctx, args) => {
     const caller = await requireMember(ctx);
-    assertSecretary(caller);
+    assertLeadership(caller);
 
     const member = await ctx.db.get(args.memberId);
     if (!member) throw new ConvexError("That member is not on the roster.");
@@ -211,9 +211,9 @@ export const requestTransfer = mutation({
     });
     await notifyMembers(
       ctx,
-      officersFor(members, destination.jamaat),
+      leadershipFor(members, String(member.jamaat), destination.jamaat),
       "Transfer request",
-      `${member.name} is waiting to join your jamaat from ${String(member.jamaat).trim()}.`,
+      `${member.name} was requested to move from ${String(member.jamaat).trim()} to ${destination.jamaat.trim()}.`,
     );
     return null;
   },
@@ -223,14 +223,14 @@ export const acceptTransfer = mutation({
   args: { transferId: v.id("jamaat_transfers") },
   handler: async (ctx, args) => {
     const caller = await requireMember(ctx);
-    assertSecretary(caller);
+    assertLeadership(caller);
 
     const transfer = await ctx.db.get(args.transferId);
     if (!transfer || transfer.status !== "pending") {
       throw new ConvexError("That transfer is no longer waiting.");
     }
     if (jamaatKey(transfer.to_jamaat) !== jamaatKey(caller.jamaat)) {
-      throw new ConvexError("A secretary of the receiving jamaat accepts this transfer.");
+      throw new ConvexError("Leadership of the receiving jamaat accepts this transfer.");
     }
 
     const member = await ctx.db.get(transfer.member_id);
@@ -253,11 +253,11 @@ export const acceptTransfer = mutation({
     );
     await notifyMembers(
       ctx,
-      [...officersFor(roster, transfer.from_jamaat), transfer.requested_by].filter(
+      leadershipFor(roster, transfer.from_jamaat, transfer.to_jamaat).filter(
         (id) => id !== member._id,
       ),
       "Transfer accepted",
-      `${member.name}'s move to ${transfer.to_jamaat} was accepted.`,
+      `${member.name}'s move from ${transfer.from_jamaat} to ${transfer.to_jamaat} was accepted.`,
     );
     return null;
   },
@@ -267,14 +267,14 @@ export const declineTransfer = mutation({
   args: { transferId: v.id("jamaat_transfers") },
   handler: async (ctx, args) => {
     const caller = await requireMember(ctx);
-    assertSecretary(caller);
+    assertLeadership(caller);
 
     const transfer = await ctx.db.get(args.transferId);
     if (!transfer || transfer.status !== "pending") {
       throw new ConvexError("That transfer is no longer waiting.");
     }
     if (jamaatKey(transfer.to_jamaat) !== jamaatKey(caller.jamaat)) {
-      throw new ConvexError("A secretary of the receiving jamaat reviews this transfer.");
+      throw new ConvexError("Leadership of the receiving jamaat reviews this transfer.");
     }
 
     await ctx.db.patch(transfer._id, {
@@ -282,12 +282,13 @@ export const declineTransfer = mutation({
       resolved_at: Date.now(),
       resolved_by: caller._id,
     });
-    const member = await ctx.db.get(transfer.member_id);
+    const members = await ctx.db.query("members").collect();
+    const member = members.find((row) => row._id === transfer.member_id);
     await notifyMembers(
       ctx,
-      [transfer.requested_by],
+      leadershipFor(members, transfer.from_jamaat, transfer.to_jamaat),
       "Transfer declined",
-      `${member?.name ?? "A member"}'s move to ${transfer.to_jamaat} was declined.`,
+      `${member?.name ?? "A member"}'s move from ${transfer.from_jamaat} to ${transfer.to_jamaat} was declined.`,
     );
     return null;
   },
@@ -297,14 +298,14 @@ export const cancelTransfer = mutation({
   args: { transferId: v.id("jamaat_transfers") },
   handler: async (ctx, args) => {
     const caller = await requireMember(ctx);
-    assertSecretary(caller);
+    assertLeadership(caller);
 
     const transfer = await ctx.db.get(args.transferId);
     if (!transfer || transfer.status !== "pending") {
       throw new ConvexError("That transfer is no longer waiting.");
     }
     if (jamaatKey(transfer.from_jamaat) !== jamaatKey(caller.jamaat)) {
-      throw new ConvexError("A secretary of the sending jamaat can cancel this transfer.");
+      throw new ConvexError("Leadership of the sending jamaat can cancel this transfer.");
     }
 
     await ctx.db.patch(transfer._id, {
@@ -316,9 +317,9 @@ export const cancelTransfer = mutation({
     const member = members.find((row) => row._id === transfer.member_id);
     await notifyMembers(
       ctx,
-      officersFor(members, transfer.to_jamaat),
+      leadershipFor(members, transfer.from_jamaat, transfer.to_jamaat),
       "Transfer cancelled",
-      `${member?.name ?? "A member"}'s transfer was cancelled.`,
+      `${member?.name ?? "A member"}'s move from ${transfer.from_jamaat} to ${transfer.to_jamaat} was cancelled.`,
     );
     return null;
   },
